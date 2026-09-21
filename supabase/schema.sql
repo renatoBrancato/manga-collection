@@ -7,6 +7,8 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   display_name text,
   api_key uuid not null default gen_random_uuid(),
+  share_enabled boolean not null default false, -- collezione visibile in sola lettura su /c/<share_slug>
+  share_slug text unique,                        -- slug casuale per il link pubblico (non è lo user id)
   created_at timestamptz not null default now()
 );
 

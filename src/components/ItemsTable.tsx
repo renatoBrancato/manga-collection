@@ -20,7 +20,7 @@ function formatCondition(item: MangaItem): string {
   return "-";
 }
 
-export default function ItemsTable({ items }: { items: MangaItem[] }) {
+export default function ItemsTable({ items, readOnly = false }: { items: MangaItem[]; readOnly?: boolean }) {
   const supabase = createClient();
   const router = useRouter();
   const [formatFilter, setFormatFilter] = useState<string>("all");
@@ -87,13 +87,15 @@ export default function ItemsTable({ items }: { items: MangaItem[] }) {
               key={item.id}
               className="group relative flex flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50 transition hover:border-slate-600"
             >
-              <button
-                onClick={() => handleDelete(item.id)}
-                className="absolute right-1.5 top-1.5 z-10 hidden h-6 w-6 items-center justify-center rounded-full bg-slate-950/80 text-slate-300 transition hover:text-red-400 group-hover:flex"
-                title="Rimuovi"
-              >
-                ✕
-              </button>
+              {!readOnly && (
+                <button
+                  onClick={() => handleDelete(item.id)}
+                  className="absolute right-1.5 top-1.5 z-10 hidden h-6 w-6 items-center justify-center rounded-full bg-slate-950/80 text-slate-300 transition hover:text-red-400 group-hover:flex"
+                  title="Rimuovi"
+                >
+                  ✕
+                </button>
+              )}
 
               <CoverImage item={item} className="aspect-[2/3] w-full" />
 

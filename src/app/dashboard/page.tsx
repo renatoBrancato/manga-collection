@@ -5,6 +5,7 @@ import ItemsTable from "@/components/ItemsTable";
 import AddItemForm from "@/components/AddItemForm";
 import LogoutButton from "@/components/LogoutButton";
 import KpiBar from "@/components/KpiBar";
+import ShareButton from "@/components/ShareButton";
 import type { MangaItem } from "@/lib/types";
 
 export default async function DashboardPage() {
@@ -15,10 +16,10 @@ export default async function DashboardPage() {
 
   if (!user) redirect("/login");
 
-  const { data: items } = await supabase
-    .from("items")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const [{ data: items }, { data: profile }] = await Promise.all([
+    supabase.from("items").select("*").order("created_at", { ascending: false }),
+    supabase.from("profiles").select("share_enabled, share_slug").eq("id", user.id).single(),
+  ]);
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-slate-50 sm:px-8">
@@ -28,6 +29,11 @@ export default async function DashboardPage() {
           <p className="text-sm text-slate-400">{user.email}</p>
         </div>
         <nav className="flex items-center gap-3">
+          <ShareButton
+            userId={user.id}
+            initialEnabled={profile?.share_enabled ?? false}
+            initialSlug={profile?.share_slug ?? null}
+          />
           <Link href="/settings" className="text-sm text-slate-300 hover:underline">
             Impostazioni / API key
           </Link>
@@ -45,3 +51,4 @@ export default async function DashboardPage() {
     </main>
   );
 }
+
