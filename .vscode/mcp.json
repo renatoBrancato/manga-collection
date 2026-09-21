@@ -1,0 +1,19 @@
+{
+  "servers": {
+    "manga-collection": {
+      "type": "http",
+      "url": "https://manga-collection-seven.vercel.app/api/mcp",
+      "headers": {
+        "Authorization": "Bearer ${input:manga_api_key}"
+      }
+    }
+  },
+  "inputs": [
+    {
+      "id": "manga_api_key",
+      "type": "promptString",
+      "description": "26d017da-a0df-4b87-ad9e-99909fe55817",
+      "password": true
+    }
+  ]
+}
