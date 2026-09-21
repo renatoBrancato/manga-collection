@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/server";
+import { uploadCoverImage } from "@/lib/storage";
 import type { IncomingItemPayload, MangaItem } from "@/lib/types";
 
 /**
@@ -16,6 +17,26 @@ export async function resolveUserIdByApiKey(apiKey: string | null | undefined): 
 
   if (error || !data) return null;
   return data.id as string;
+}
+
+/**
+ * If the payload carries a base64 photo (the common case for MCP callers
+ * that can't produce a public URL), uploads it to Storage and replaces it
+ * with the resulting public image_url. Mutates a copy, never the input.
+ */
+async function resolveImage<T extends { image_url?: string; image_base64?: string }>(
+  userId: string,
+  item: T
+): Promise<{ item: T; error?: string }> {
+  if (!item.image_base64) return { item };
+
+  const result = await uploadCoverImage(userId, item.image_base64);
+  const { image_base64, ...rest } = item;
+  void image_base64;
+  if ("error" in result) {
+    return { item: rest as T, error: `Caricamento immagine fallito: ${result.error}` };
+  }
+  return { item: { ...rest, image_url: result.url } as T };
 }
 
 function toRow(userId: string, item: IncomingItemPayload, source: "manual" | "mcp") {
@@ -47,12 +68,15 @@ export async function insertItems(
   userId: string,
   items: IncomingItemPayload[],
   source: "manual" | "mcp"
-): Promise<{ inserted: MangaItem[]; error?: string }> {
-  const rows = items.filter((item) => item && item.title).map((item) => toRow(userId, item, source));
-
-  if (rows.length === 0) {
+): Promise<{ inserted: MangaItem[]; error?: string; imageWarning?: string }> {
+  const valid = items.filter((item) => item && item.title);
+  if (valid.length === 0) {
     return { inserted: [], error: "No valid items ('title' is required)" };
   }
+
+  const resolved = await Promise.all(valid.map((item) => resolveImage(userId, item)));
+  const imageWarning = resolved.find((r) => r.error)?.error;
+  const rows = resolved.map((r) => toRow(userId, r.item, source));
 
   const admin = createAdminClient();
   const { data, error } = await admin.from("items").insert(rows).select();
@@ -61,23 +85,25 @@ export async function insertItems(
     return { inserted: [], error: error.message };
   }
 
-  return { inserted: (data ?? []) as MangaItem[] };
+  return { inserted: (data ?? []) as MangaItem[], imageWarning };
 }
 
 export async function updateItem(
   userId: string,
   id: string,
   patch: Partial<IncomingItemPayload>
-): Promise<{ updated: MangaItem | null; error?: string }> {
+): Promise<{ updated: MangaItem | null; error?: string; imageWarning?: string }> {
+  const { item: resolvedPatch, error: imageWarning } = await resolveImage(userId, patch);
+
   // Only include fields explicitly provided in the patch, so omitted fields
   // are left untouched (this is a true partial update, not an upsert).
   const row: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(patch)) {
+  for (const [key, value] of Object.entries(resolvedPatch)) {
     if (value !== undefined) row[key] = value;
   }
 
   if (Object.keys(row).length === 0) {
-    return { updated: null, error: "No fields provided to update" };
+    return { updated: null, error: imageWarning ?? "No fields provided to update" };
   }
 
   const admin = createAdminClient();
@@ -91,7 +117,7 @@ export async function updateItem(
 
   if (error) return { updated: null, error: error.message };
   if (!data) return { updated: null, error: "Item not found" };
-  return { updated: data as MangaItem };
+  return { updated: data as MangaItem, imageWarning };
 }
 
 export async function listItems(userId: string): Promise<MangaItem[]> {

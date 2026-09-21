@@ -46,5 +46,7 @@ export interface IncomingItemPayload {
   estimated_value?: number;
   currency?: string;
   image_url?: string;
+  /** Foto in base64 (o data URI), usata quando non c'è un URL pubblico; viene caricata su Storage e convertita in image_url. */
+  image_base64?: string;
   notes?: string;
 }

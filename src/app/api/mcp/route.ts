@@ -69,12 +69,23 @@ function buildServer(userId: string) {
           .optional()
           .describe("Valore di mercato stimato in euro, ricercato sul web"),
         currency: z.string().default("EUR"),
-        image_url: z.string().optional(),
+        image_url: z
+          .string()
+          .optional()
+          .describe(
+            "URL pubblico della foto, SOLO se già disponibile online. Per la foto appena scattata usa invece 'image_base64'."
+          ),
+        image_base64: z
+          .string()
+          .optional()
+          .describe(
+            "Foto del volume/copertina codificata in base64 (o data URI 'data:image/jpeg;base64,...'). È il caso normale quando l'immagine viene da una foto appena scattata in chat: verrà caricata automaticamente e comparirà nella dashboard."
+          ),
         notes: z.string().optional(),
       },
     },
     async (input) => {
-      const { inserted, error } = await insertItems(userId, [input], "mcp");
+      const { inserted, error, imageWarning } = await insertItems(userId, [input], "mcp");
       if (error) {
         return { content: [{ type: "text", text: `Errore: ${error}` }], isError: true };
       }
@@ -85,7 +96,9 @@ function buildServer(userId: string) {
             type: "text",
             text: `Aggiunto alla collezione: "${item.title}"${item.volume_number ? ` vol. ${item.volume_number}` : ""}${
               item.issue_number ? ` n. ${item.issue_number}` : ""
-            }${item.estimated_value != null ? ` — valore stimato ${item.estimated_value} ${item.currency}` : ""}.`,
+            }${item.estimated_value != null ? ` — valore stimato ${item.estimated_value} ${item.currency}` : ""}.${
+              imageWarning ? ` ⚠️ ${imageWarning}` : ""
+            }`,
           },
         ],
       };
@@ -119,20 +132,32 @@ function buildServer(userId: string) {
         language: z.string().optional(),
         estimated_value: z.number().optional(),
         currency: z.string().optional(),
-        image_url: z.string().optional().describe("URL della foto, per aggiungerla/sostituirla in un secondo momento"),
+        image_url: z
+          .string()
+          .optional()
+          .describe("URL pubblico della foto, SOLO se già disponibile online. Per una foto appena scattata usa 'image_base64'."),
+        image_base64: z
+          .string()
+          .optional()
+          .describe(
+            "Foto codificata in base64 (o data URI) da aggiungere/sostituire per questo volume, es. quando l'utente scatta la foto solo dopo aver già salvato l'item."
+          ),
         notes: z.string().optional(),
       },
     },
     async ({ id, ...patch }) => {
-      const { updated, error } = await updateItem(userId, id, patch);
+      const { updated, error, imageWarning } = await updateItem(userId, id, patch);
       if (error) {
         return { content: [{ type: "text", text: `Errore: ${error}` }], isError: true };
       }
+      const changedFields = Object.keys(patch).map((k) => (k === "image_base64" ? "image_url" : k));
       return {
         content: [
           {
             type: "text",
-            text: `Aggiornato: "${updated!.title}" (id ${updated!.id}). Campi modificati: ${Object.keys(patch).join(", ") || "nessuno"}.`,
+            text: `Aggiornato: "${updated!.title}" (id ${updated!.id}). Campi modificati: ${changedFields.join(", ") || "nessuno"}.${
+              imageWarning ? ` ⚠️ ${imageWarning}` : ""
+            }`,
           },
         ],
       };
