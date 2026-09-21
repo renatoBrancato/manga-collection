@@ -9,7 +9,7 @@ export interface MangaItem {
   format: ItemFormat;
   volume_number: number | null;
   issue_number: string | null;
-  release_date: string | null;
+  release_year: number | null;
   publisher: string | null;
   isbn: string | null;
   is_first_print: boolean | null;
@@ -34,7 +34,7 @@ export interface IncomingItemPayload {
   format?: ItemFormat;
   volume_number?: number;
   issue_number?: string;
-  release_date?: string;
+  release_year?: number;
   publisher?: string;
   isbn?: string;
   is_first_print?: boolean;

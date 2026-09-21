@@ -40,10 +40,13 @@ function buildServer(userId: string) {
           .describe("'tankobon' per un volume rilegato, 'zashi' per una rivista/numero seriale"),
         volume_number: z.number().optional().describe("Numero del volume (per i tankobon)"),
         issue_number: z.string().optional().describe("Numero/uscita (per gli zashi, es. '2024-32')"),
-        release_date: z
-          .string()
+        release_year: z
+          .number()
+          .int()
           .optional()
-          .describe("Data di pubblicazione (dal colophon per i tankobon, data di uscita per gli zashi), formato YYYY-MM-DD"),
+          .describe(
+            "Anno di pubblicazione/uscita (es. 2024), dal colophon per i tankobon o dalla copertina/data per gli zashi. Per gli zashi è il dato chiave insieme al numero, preferisci l'anno alla data completa se non certa."
+          ),
         publisher: z.string().optional().describe("Editore (es. Shueisha, Star Comics)"),
         isbn: z.string().optional(),
         is_first_print: z

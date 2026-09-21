@@ -26,7 +26,7 @@ function toRow(userId: string, item: IncomingItemPayload, source: "manual" | "mc
     format: item.format ?? "tankobon",
     volume_number: item.volume_number ?? null,
     issue_number: item.issue_number ?? null,
-    release_date: item.release_date ?? null,
+    release_year: item.release_year ?? null,
     publisher: item.publisher ?? null,
     isbn: item.isbn ?? null,
     is_first_print: item.is_first_print ?? null,

@@ -33,7 +33,7 @@ export default function AddItemForm({ userId }: { userId: string }) {
       volume_number:
         format === "tankobon" && form.get("volume_number") ? Number(form.get("volume_number")) : null,
       issue_number: format === "zashi" ? String(form.get("issue_number") || "") || null : null,
-      release_date: String(form.get("release_date") || "") || null,
+      release_year: form.get("release_year") ? Number(form.get("release_year")) : null,
       publisher: String(form.get("publisher") || "") || null,
       isbn: String(form.get("isbn") || "") || null,
       is_first_print: isFirstPrintRaw === "" ? null : isFirstPrintRaw === "true",
@@ -88,7 +88,15 @@ export default function AddItemForm({ userId }: { userId: string }) {
       ) : (
         <input name="issue_number" placeholder="Numero/uscita" className="input" />
       )}
-      <input name="release_date" type="date" placeholder="Data pubblicazione" className="input" />
+      <input
+        name="release_year"
+        type="number"
+        min="1900"
+        max="2100"
+        step="1"
+        placeholder="Anno di uscita"
+        className="input"
+      />
       <input name="publisher" placeholder="Editore" className="input" />
       <input name="isbn" placeholder="ISBN" className="input" />
 

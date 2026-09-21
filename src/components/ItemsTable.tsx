@@ -114,6 +114,7 @@ export default function ItemsTable({ items }: { items: MangaItem[] }) {
                   {(item.volume_number ?? item.issue_number) != null
                     ? ` · #${item.volume_number ?? item.issue_number}`
                     : ""}
+                  {item.release_year ? ` · ${item.release_year}` : ""}
                 </p>
                 <p className="truncate text-slate-500">
                   {item.is_first_print === true

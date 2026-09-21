@@ -21,7 +21,8 @@ create table if not exists public.items (
   format text not null default 'tankobon' check (format in ('tankobon', 'zashi')), -- tankobon (volume) | zashi (rivista, es. Weekly Shonen Jump)
   volume_number numeric,       -- numero volume (tankobon)
   issue_number text,           -- numero/uscita (zashi)
-  release_date date,           -- data di pubblicazione (colophon per tankobon, data di uscita per zashi)
+  release_date date,           -- (deprecato, non più usato in UI) data di pubblicazione precisa
+  release_year smallint,       -- anno di pubblicazione/uscita: dato chiave per gli zashi (numero + anno)
   publisher text,
   isbn text,
   is_first_print boolean,      -- vero se prima stampa/初版 (rilevata dal colophon)
