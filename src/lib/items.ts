@@ -64,6 +64,36 @@ export async function insertItems(
   return { inserted: (data ?? []) as MangaItem[] };
 }
 
+export async function updateItem(
+  userId: string,
+  id: string,
+  patch: Partial<IncomingItemPayload>
+): Promise<{ updated: MangaItem | null; error?: string }> {
+  // Only include fields explicitly provided in the patch, so omitted fields
+  // are left untouched (this is a true partial update, not an upsert).
+  const row: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (value !== undefined) row[key] = value;
+  }
+
+  if (Object.keys(row).length === 0) {
+    return { updated: null, error: "No fields provided to update" };
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("items")
+    .update(row)
+    .eq("id", id)
+    .eq("user_id", userId)
+    .select()
+    .maybeSingle();
+
+  if (error) return { updated: null, error: error.message };
+  if (!data) return { updated: null, error: "Item not found" };
+  return { updated: data as MangaItem };
+}
+
 export async function listItems(userId: string): Promise<MangaItem[]> {
   const admin = createAdminClient();
   const { data, error } = await admin

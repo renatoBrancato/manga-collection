@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
-import { resolveUserIdByApiKey, insertItems, listItems } from "@/lib/items";
+import { resolveUserIdByApiKey, insertItems, listItems, updateItem } from "@/lib/items";
 
 /**
  * MCP server exposed to ChatGPT (or any MCP-compatible client) as a custom
@@ -86,6 +86,53 @@ function buildServer(userId: string) {
             text: `Aggiunto alla collezione: "${item.title}"${item.volume_number ? ` vol. ${item.volume_number}` : ""}${
               item.issue_number ? ` n. ${item.issue_number}` : ""
             }${item.estimated_value != null ? ` — valore stimato ${item.estimated_value} ${item.currency}` : ""}.`,
+          },
+        ],
+      };
+    }
+  );
+
+  server.registerTool(
+    "update_manga_item",
+    {
+      title: "Aggiorna un volume esistente",
+      description:
+        "Aggiorna solo i campi specificati di un volume/rivista già presente nella collezione (es. cambiare grading dopo il ritorno dall'ente, aggiungere una foto in un secondo momento, correggere il valore stimato). I campi omessi restano invariati. Usa 'list_manga_items' per trovare l'id corretto se non lo conosci già.",
+      inputSchema: {
+        id: z.string().uuid().describe("ID dell'elemento da aggiornare, ottenuto da 'list_manga_items'"),
+        title: z.string().optional(),
+        series: z.string().optional(),
+        format: z.enum(["tankobon", "zashi"]).optional(),
+        volume_number: z.number().optional(),
+        issue_number: z.string().optional(),
+        release_year: z.number().int().optional().describe("Anno di pubblicazione/uscita (es. 2024)"),
+        publisher: z.string().optional(),
+        isbn: z.string().optional(),
+        is_first_print: z.boolean().optional(),
+        printing_notes: z.string().optional(),
+        grading_authority: z
+          .enum(["CGC", "CBCS", "BGS", "altro"])
+          .optional()
+          .describe("Ente di grading, es. da impostare quando il volume torna dalla gradazione"),
+        grading_value: z.number().optional().describe("Voto di grading (es. 9.8)"),
+        condition_estimate: z.string().optional(),
+        language: z.string().optional(),
+        estimated_value: z.number().optional(),
+        currency: z.string().optional(),
+        image_url: z.string().optional().describe("URL della foto, per aggiungerla/sostituirla in un secondo momento"),
+        notes: z.string().optional(),
+      },
+    },
+    async ({ id, ...patch }) => {
+      const { updated, error } = await updateItem(userId, id, patch);
+      if (error) {
+        return { content: [{ type: "text", text: `Errore: ${error}` }], isError: true };
+      }
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Aggiornato: "${updated!.title}" (id ${updated!.id}). Campi modificati: ${Object.keys(patch).join(", ") || "nessuno"}.`,
           },
         ],
       };
