@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/server";
-import { uploadCoverImage } from "@/lib/storage";
+import { uploadCoverImage, validateDirectImageUrl } from "@/lib/storage";
 import type { IncomingItemPayload, MangaItem } from "@/lib/types";
 
 /**
@@ -22,21 +22,37 @@ export async function resolveUserIdByApiKey(apiKey: string | null | undefined): 
 /**
  * If the payload carries a base64 photo (the common case for MCP callers
  * that can't produce a public URL), uploads it to Storage and replaces it
- * with the resulting public image_url. Mutates a copy, never the input.
+ * with the resulting public image_url. Otherwise, if a plain image_url was
+ * given, verifies it actually points to image bytes (not e.g. a wiki page
+ * that merely displays a picture) and drops it if not, so the cover
+ * fallback chain (ISBN lookup, then placeholder) takes over instead of a
+ * permanently broken image. Mutates a copy, never the input.
  */
 async function resolveImage<T extends { image_url?: string; image_base64?: string }>(
   userId: string,
   item: T
 ): Promise<{ item: T; error?: string }> {
-  if (!item.image_base64) return { item };
-
-  const result = await uploadCoverImage(userId, item.image_base64);
-  const { image_base64, ...rest } = item;
-  void image_base64;
-  if ("error" in result) {
-    return { item: rest as T, error: `Caricamento immagine fallito: ${result.error}` };
+  if (item.image_base64) {
+    const result = await uploadCoverImage(userId, item.image_base64);
+    const { image_base64, ...rest } = item;
+    void image_base64;
+    if ("error" in result) {
+      return { item: rest as T, error: `Caricamento immagine fallito: ${result.error}` };
+    }
+    return { item: { ...rest, image_url: result.url } as T };
   }
-  return { item: { ...rest, image_url: result.url } as T };
+
+  if (item.image_url) {
+    const valid = await validateDirectImageUrl(item.image_url);
+    if (!valid) {
+      return {
+        item: { ...item, image_url: undefined },
+        error: `Il link immagine fornito non punta a un'immagine diretta ed è stato ignorato (${item.image_url}). Verrà mostrata una copertina alternativa o un segnaposto.`,
+      };
+    }
+  }
+
+  return { item };
 }
 
 function toRow(userId: string, item: IncomingItemPayload, source: "manual" | "mcp") {

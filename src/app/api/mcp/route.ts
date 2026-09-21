@@ -73,13 +73,13 @@ function buildServer(userId: string) {
           .string()
           .optional()
           .describe(
-            "URL pubblico della foto, SOLO se già disponibile online. Per la foto appena scattata usa invece 'image_base64'."
+            "URL DIRETTO a un file immagine (deve finire con l'immagine vera e propria e rispondere con Content-Type image/*, es. link a un file .jpg/.png su un CDN/e-commerce). NON usare link a pagine web che mostrano un'immagine (es. pagine wiki, pagine prodotto, risultati di ricerca): verrebbero scartati perché non caricabili come <img>. Se non sei sicuro al 100% che l'URL sia diretto, o se l'immagine viene da una foto scattata/allegata in chat, usa invece 'image_base64'."
           ),
         image_base64: z
           .string()
           .optional()
           .describe(
-            "Foto del volume/copertina codificata in base64 (o data URI 'data:image/jpeg;base64,...'). È il caso normale quando l'immagine viene da una foto appena scattata in chat: verrà caricata automaticamente e comparirà nella dashboard."
+            "Foto del volume/copertina codificata in base64 (o data URI 'data:image/jpeg;base64,...'). USA SEMPRE QUESTO CAMPO quando l'immagine è una foto scattata o allegata dall'utente in chat (il caso più comune): leggi i byte del file allegato e passali qui, verranno caricati automaticamente e compariranno nella dashboard."
           ),
         notes: z.string().optional(),
       },
@@ -135,12 +135,14 @@ function buildServer(userId: string) {
         image_url: z
           .string()
           .optional()
-          .describe("URL pubblico della foto, SOLO se già disponibile online. Per una foto appena scattata usa 'image_base64'."),
+          .describe(
+            "URL DIRETTO a un file immagine (Content-Type image/*), non una pagina web che la contiene. Se non sei sicuro, o la foto viene da un allegato in chat, usa 'image_base64'."
+          ),
         image_base64: z
           .string()
           .optional()
           .describe(
-            "Foto codificata in base64 (o data URI) da aggiungere/sostituire per questo volume, es. quando l'utente scatta la foto solo dopo aver già salvato l'item."
+            "Foto codificata in base64 (o data URI) da aggiungere/sostituire per questo volume, es. quando l'utente scatta/allega la foto solo dopo aver già salvato l'item. Usa sempre questo per foto scattate in chat."
           ),
         notes: z.string().optional(),
       },

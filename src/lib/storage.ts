@@ -53,3 +53,28 @@ export async function uploadCoverImage(
   const { data } = admin.storage.from(BUCKET).getPublicUrl(path);
   return { url: data.publicUrl };
 }
+
+/**
+ * Checks that a URL actually serves image bytes (Content-Type: image/*)
+ * rather than an HTML page that merely *contains* an image (a very common
+ * mistake: e.g. a wiki "File:Volume_3.png" page URL, which ends in .png but
+ * returns text/html). Invalid links are dropped so the cover fallback
+ * chain (ISBN lookup, then placeholder) kicks in instead of a broken
+ * image. Uses a short timeout since this runs inline in the MCP call.
+ */
+export async function validateDirectImageUrl(url: string): Promise<string | null> {
+  try {
+    const check = async (method: "HEAD" | "GET") =>
+      fetch(url, { method, redirect: "follow", signal: AbortSignal.timeout(5000) });
+
+    let res = await check("HEAD");
+    // Some hosts don't implement HEAD properly (405/501/odd content-type); retry with GET.
+    if (!res.ok || !res.headers.get("content-type")?.startsWith("image/")) {
+      res = await check("GET");
+    }
+    const contentType = res.headers.get("content-type") ?? "";
+    return res.ok && contentType.startsWith("image/") ? url : null;
+  } catch {
+    return null;
+  }
+}
