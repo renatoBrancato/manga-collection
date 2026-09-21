@@ -2,7 +2,7 @@
   "servers": {
     "manga-collection": {
       "type": "http",
-      "url": "https://manga-collection-seven.vercel.app/api/mcp",
+      "url": "http://localhost:3000/api/mcp",
       "headers": {
         "Authorization": "Bearer ${input:manga_api_key}"
       }
@@ -12,7 +12,7 @@
     {
       "id": "manga_api_key",
       "type": "promptString",
-      "description": "26d017da-a0df-4b87-ad9e-99909fe55817",
+      "description": "API key personale (pagina /settings della web app, dopo il login)",
       "password": true
     }
   ]
