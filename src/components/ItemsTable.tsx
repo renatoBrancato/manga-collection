@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { MangaItem } from "@/lib/types";
+import CoverImage from "@/components/CoverImage";
 
 const FORMAT_LABELS: Record<string, string> = {
   tankobon: "Tankobon",
@@ -75,71 +76,67 @@ export default function ItemsTable({ items }: { items: MangaItem[] }) {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-800">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-900 text-slate-400">
-            <tr>
-              <th className="px-4 py-2">Titolo</th>
-              <th className="px-4 py-2">Formato</th>
-              <th className="px-4 py-2">Serie</th>
-              <th className="px-4 py-2">N.</th>
-              <th className="px-4 py-2">Editore</th>
-              <th className="px-4 py-2">Stampa</th>
-              <th className="px-4 py-2">Condizione/Grading</th>
-              <th className="px-4 py-2">Valore</th>
-              <th className="px-4 py-2">Origine</th>
-              <th className="px-4 py-2" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800">
-            {filtered.map((item) => (
-              <tr key={item.id} className="hover:bg-slate-900/50">
-                <td className="px-4 py-2 font-medium">{item.title}</td>
-                <td className="px-4 py-2">
-                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs">
+      {filtered.length === 0 ? (
+        <div className="rounded-xl border border-slate-800 px-4 py-10 text-center text-slate-500">
+          Nessun elemento trovato. Aggiungine uno manualmente o scansionalo tramite il connettore MCP.
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+          {filtered.map((item) => (
+            <div
+              key={item.id}
+              className="group relative flex flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50 transition hover:border-slate-600"
+            >
+              <button
+                onClick={() => handleDelete(item.id)}
+                className="absolute right-1.5 top-1.5 z-10 hidden h-6 w-6 items-center justify-center rounded-full bg-slate-950/80 text-slate-300 transition hover:text-red-400 group-hover:flex"
+                title="Rimuovi"
+              >
+                ✕
+              </button>
+
+              <CoverImage item={item} className="aspect-[2/3] w-full" />
+
+              <div className="flex flex-1 flex-col gap-1 p-2.5 text-xs">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px]">
                     {FORMAT_LABELS[item.format] ?? item.format}
                   </span>
-                </td>
-                <td className="px-4 py-2 text-slate-400">{item.series ?? "-"}</td>
-                <td className="px-4 py-2">{item.volume_number ?? item.issue_number ?? "-"}</td>
-                <td className="px-4 py-2 text-slate-400">{item.publisher ?? "-"}</td>
-                <td className="px-4 py-2 text-slate-400">
-                  {item.is_first_print === true ? "Prima stampa" : item.is_first_print === false ? "Ristampa" : "-"}
+                  <span className="text-slate-500">
+                    {item.source === "mcp" ? "🤖" : "✍️"}
+                  </span>
+                </div>
+                <p className="line-clamp-2 font-medium text-slate-100" title={item.title}>
+                  {item.title}
+                </p>
+                <p className="truncate text-slate-400" title={item.series ?? undefined}>
+                  {item.series ?? "-"}
+                  {(item.volume_number ?? item.issue_number) != null
+                    ? ` · #${item.volume_number ?? item.issue_number}`
+                    : ""}
+                </p>
+                <p className="truncate text-slate-500">
+                  {item.is_first_print === true
+                    ? "Prima stampa"
+                    : item.is_first_print === false
+                      ? "Ristampa"
+                      : "-"}
                   {item.printing_notes ? ` (${item.printing_notes})` : ""}
-                </td>
-                <td className="px-4 py-2 text-slate-400">{formatCondition(item)}</td>
-                <td className="px-4 py-2">
+                </p>
+                <p className="truncate text-slate-500">{formatCondition(item)}</p>
+                <p className="mt-auto font-semibold text-emerald-400">
                   {item.estimated_value != null
                     ? item.estimated_value.toLocaleString("it-IT", {
                         style: "currency",
                         currency: item.currency || "EUR",
                       })
                     : "-"}
-                </td>
-                <td className="px-4 py-2 text-slate-500">
-                  {item.source === "mcp" ? "🤖 MCP" : "✍️ Manuale"}
-                </td>
-                <td className="px-4 py-2 text-right">
-                  <button
-                    onClick={() => handleDelete(item.id)}
-                    className="text-slate-500 transition hover:text-red-400"
-                    title="Rimuovi"
-                  >
-                    ✕
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-slate-500">
-                  Nessun elemento trovato. Aggiungine uno manualmente o scansionalo tramite il connettore MCP.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

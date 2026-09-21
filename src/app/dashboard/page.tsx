@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import ItemsTable from "@/components/ItemsTable";
 import AddItemForm from "@/components/AddItemForm";
 import LogoutButton from "@/components/LogoutButton";
+import KpiBar from "@/components/KpiBar";
 import type { MangaItem } from "@/lib/types";
 
 export default async function DashboardPage() {
@@ -33,6 +34,8 @@ export default async function DashboardPage() {
           <LogoutButton />
         </nav>
       </header>
+
+      <KpiBar items={(items ?? []) as MangaItem[]} />
 
       <div className="mb-6">
         <AddItemForm userId={user.id} />
