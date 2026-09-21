@@ -18,17 +18,23 @@ create table if not exists public.items (
   user_id uuid not null references public.profiles (id) on delete cascade,
   title text not null,
   series text,
-  volume_number numeric,
+  format text not null default 'tankobon' check (format in ('tankobon', 'zashi')), -- tankobon (volume) | zashi (rivista, es. Weekly Shonen Jump)
+  volume_number numeric,       -- numero volume (tankobon)
+  issue_number text,           -- numero/uscita (zashi)
+  release_date date,           -- data di pubblicazione (colophon per tankobon, data di uscita per zashi)
   publisher text,
   isbn text,
-  condition text,        -- e.g. "nuovo", "come nuovo", "buono", "accettabile", "rovinato"
-  status text default 'owned', -- owned | wanted | reading | completed
+  is_first_print boolean,      -- vero se prima stampa/初版 (rilevata dal colophon)
+  printing_notes text,         -- es. "3a ristampa", note libere sulla stampa/edizione
+  grading_authority text check (grading_authority is null or grading_authority in ('CGC', 'CBCS', 'BGS', 'altro')),
+  grading_value numeric,       -- es. 9.8, se gradato da un ente
+  condition_estimate text,     -- stima stato (usata solo se NON gradato)
   language text,
   estimated_value numeric,
   currency text default 'EUR',
   image_url text,
   notes text,
-  source text default 'manual', -- 'manual' | 'chatgpt'
+  source text default 'manual', -- 'manual' | 'mcp'
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -101,7 +107,7 @@ create policy "items are self-deletable"
   on public.items for delete
   using (auth.uid() = user_id);
 
--- Note: the /api/collection route used by the ChatGPT Action authenticates
--- with the SERVICE ROLE key (bypassing RLS) after manually validating the
--- caller's api_key against public.profiles, then inserts rows on behalf of
--- that user_id. RLS above protects direct client (anon/browser) access.
+-- Note: the /api/collection and /api/mcp routes authenticate with the
+-- SERVICE ROLE key (bypassing RLS) after manually validating the caller's
+-- api_key against public.profiles, then insert rows on behalf of that
+-- user_id. RLS above protects direct client (anon/browser) access.

@@ -44,22 +44,22 @@ export default async function SettingsPage() {
         </section>
 
         <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-          <h2 className="font-semibold">Come collegare ChatGPT</h2>
+          <h2 className="font-semibold">Come collegare ChatGPT (connettore MCP)</h2>
           <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm text-slate-300">
-            <li>Su chatgpt.com vai su Explore GPTs → Create → configura un Custom GPT.</li>
-            <li>
-              Nelle istruzioni incolla il prompt suggerito (vedi{" "}
-              <code className="text-emerald-400">public/gpt/instructions.md</code> nel progetto).
+            <li>Su chatgpt.com apri <strong>Impostazioni → App e connettori</strong> (potrebbe servire attivare prima la &quot;Developer mode&quot; nelle impostazioni avanzate).</li>
+            <li>Clicca <strong>Crea/Aggiungi connettore</strong> e inserisci come URL:{" "}
+              <code className="text-emerald-400">{siteUrl}/api/mcp</code>
             </li>
             <li>
-              In &quot;Actions&quot; → &quot;Create new action&quot;, importa lo schema OpenAPI da{" "}
-              <code className="text-emerald-400">{siteUrl}/gpt/openapi.yaml</code>.
+              Come autenticazione scegli <strong>API Key / Bearer token</strong> e incolla la tua API key
+              qui sopra. Ogni utente configura la propria: i dati restano separati per account.
             </li>
+            <li>Salva. ChatGPT rileverà automaticamente gli strumenti <code className="text-emerald-400">add_manga_item</code> e <code className="text-emerald-400">list_manga_items</code>.</li>
             <li>
-              Imposta l&apos;autenticazione dell&apos;Action su &quot;API Key&quot; → &quot;Bearer&quot;,
-              incollando la key qui sopra.
+              In chat, allega la foto del volume (copertina, dorso ed eventualmente il colophon per la
+              prima stampa) e chiedi a ChatGPT di identificarlo, stimarne il valore cercando sul web, e
+              salvarlo nella collezione: userà automaticamente il connettore.
             </li>
-            <li>Fai una foto al dorso/copertina del volume nella chat: il GPT estrae i metadati, stima il valore cercando sul web, e li invia automaticamente alla tua collezione.</li>
           </ol>
         </section>
       </div>
