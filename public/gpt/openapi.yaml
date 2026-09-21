@@ -1,0 +1,102 @@
+openapi: 3.1.0
+info:
+  title: Manga Collection API
+  description: >
+    API usata dal Custom GPT "Manga Collection Scanner" per salvare i volumi
+    manga/tankōbon riconosciuti da una foto nella collezione dell'utente.
+  version: 1.0.0
+servers:
+  - url: https://TUO-DOMINIO.vercel.app
+    description: Sostituisci con l'URL del deployment Vercel
+paths:
+  /api/collection:
+    post:
+      operationId: addMangaItem
+      summary: Aggiunge uno o più volumi manga alla collezione dell'utente autenticato
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/MangaItem"
+                - $ref: "#/components/schemas/MangaItemBatch"
+      responses:
+        "201":
+          description: Volumi salvati con successo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  inserted:
+                    type: integer
+        "401":
+          description: API key mancante o non valida
+        "400":
+          description: Payload non valido
+    get:
+      operationId: listMangaItems
+      summary: Elenca i volumi salvati per l'utente autenticato (utile per debug)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Elenco dei volumi
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: >
+        API key personale dell'utente, disponibile nella pagina Impostazioni
+        della web app.
+  schemas:
+    MangaItem:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          description: Titolo dell'opera (es. "One Piece")
+        series:
+          type: string
+          description: Nome della serie, se diverso dal titolo del volume
+        volume_number:
+          type: number
+          description: Numero del volume/tankōbon
+        publisher:
+          type: string
+          description: Editore (es. "Star Comics", "Shueisha")
+        isbn:
+          type: string
+        condition:
+          type: string
+          description: Stato fisico stimato (nuovo, come nuovo, buono, accettabile, rovinato)
+        status:
+          type: string
+          enum: [owned, wanted, reading, completed]
+          default: owned
+        language:
+          type: string
+        estimated_value:
+          type: number
+          description: Valore di mercato stimato in euro, ricercato sul web
+        currency:
+          type: string
+          default: EUR
+        image_url:
+          type: string
+          description: URL della foto scansionata, se disponibile
+        notes:
+          type: string
+    MangaItemBatch:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MangaItem"
