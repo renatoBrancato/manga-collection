@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { MangaItem } from "@/lib/types";
 import CoverImage from "@/components/CoverImage";
+import EditItemModal from "@/components/EditItemModal";
 
 const FORMAT_LABELS: Record<string, string> = {
   tankobon: "Tankobon",
@@ -25,6 +26,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
   const router = useRouter();
   const [formatFilter, setFormatFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [editingItem, setEditingItem] = useState<MangaItem | null>(null);
 
   const filtered = useMemo(() => {
     return items.filter((item) => {
@@ -88,13 +90,22 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
               className="group relative flex flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50 transition hover:border-slate-600"
             >
               {!readOnly && (
-                <button
-                  onClick={() => handleDelete(item.id)}
-                  className="absolute right-1.5 top-1.5 z-10 hidden h-6 w-6 items-center justify-center rounded-full bg-slate-950/80 text-slate-300 transition hover:text-red-400 group-hover:flex"
-                  title="Rimuovi"
-                >
-                  ✕
-                </button>
+                <div className="absolute right-1.5 top-1.5 z-10 hidden gap-1 group-hover:flex">
+                  <button
+                    onClick={() => setEditingItem(item)}
+                    className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-950/80 text-slate-300 transition hover:text-indigo-400"
+                    title="Modifica"
+                  >
+                    ✎
+                  </button>
+                  <button
+                    onClick={() => handleDelete(item.id)}
+                    className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-950/80 text-slate-300 transition hover:text-red-400"
+                    title="Rimuovi"
+                  >
+                    ✕
+                  </button>
+                </div>
               )}
 
               <CoverImage item={item} className="aspect-[2/3] w-full" />
@@ -140,6 +151,8 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
           ))}
         </div>
       )}
+
+      {editingItem && <EditItemModal item={editingItem} onClose={() => setEditingItem(null)} />}
     </div>
   );
 }
