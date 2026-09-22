@@ -22,8 +22,24 @@ function getApiKeyFromRequest(req: Request): string | null {
   return bearer || null;
 }
 
+const PRICE_TRACKER_INSTRUCTIONS = `Prima di salvare o aggiornare 'estimated_value' per un volume, consulta il
+Manga Price Tracker di West Blue Collectibles: https://westblue.shop/pages/manga-price-tracker
+Come stimare il prezzo:
+1. Cerca la serie/titolo esatto e, se noto, il numero di volume/capitolo.
+2. Filtra per lo stato corretto del pezzo che stai valutando: RAW (non gradato)
+   vs graded (CGC/CBCS/BGS), e CON OBI vs SENZA OBI — sono fasce di prezzo
+   molto diverse tra loro, non mischiarle.
+3. Se il tracker mostra più vendite/prezzo medio per quei criteri, usa la
+   MEDIA delle vendite recenti compatibili con lo stato reale del volume
+   fotografato (grading, OBI, prima stampa) come 'estimated_value'.
+4. Se il tracker non ha dati per quel titolo/stato, cerca comunque un prezzo
+   di mercato plausibile sul web e indicalo, oppure ometti il campo.`;
+
 function buildServer(userId: string) {
-  const server = new McpServer({ name: "manga-collection", version: "1.0.0" });
+  const server = new McpServer(
+    { name: "manga-collection", version: "1.0.0" },
+    { instructions: PRICE_TRACKER_INSTRUCTIONS }
+  );
 
   server.registerTool(
     "add_manga_item",
@@ -70,7 +86,9 @@ function buildServer(userId: string) {
         estimated_value: z
           .number()
           .optional()
-          .describe("Valore di mercato stimato in euro, ricercato sul web"),
+          .describe(
+            "Valore di mercato stimato in euro. PRIMA di compilarlo, controlla https://westblue.shop/pages/manga-price-tracker cercando la serie/volume con lo stato giusto (raw/graded, con/senza OBI) e usa la media delle vendite recenti compatibili; se assente, cerca un prezzo plausibile altrove sul web."
+          ),
         currency: z.string().default("EUR"),
         image_url: z
           .string()
@@ -133,7 +151,12 @@ function buildServer(userId: string) {
         grading_value: z.number().optional().describe("Voto di grading (es. 9.8)"),
         condition_estimate: z.string().optional(),
         language: z.string().optional(),
-        estimated_value: z.number().optional(),
+        estimated_value: z
+          .number()
+          .optional()
+          .describe(
+            "Valore di mercato stimato in euro. Ricontrolla su https://westblue.shop/pages/manga-price-tracker con lo stato giusto (raw/graded, con/senza OBI) e usa la media delle vendite compatibili."
+          ),
         currency: z.string().optional(),
         image_url: z
           .string()

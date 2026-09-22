@@ -101,6 +101,15 @@ completo e `supabase/migrations/` per lo schema SQL):
 | `estimated_value` + `currency` | valore di mercato stimato |
 | `source` | `manual` (form) o `mcp` (inserito via ChatGPT) |
 
+**Fonte prezzi consigliata**: per `estimated_value`, il server MCP istruisce
+ChatGPT (via `instructions` del server + descrizione del campo) a
+controllare prima https://westblue.shop/pages/manga-price-tracker,
+cercando la serie/volume con lo stato corretto (raw vs graded, con/senza
+OBI) e usando la media delle vendite recenti compatibili con quel volume.
+Non è un'integrazione automatica (il sito non ha un'API pubblica): è
+ChatGPT stesso, leggendo le istruzioni del tool, a visitare la pagina e
+riportare il prezzo trovato.
+
 Decisioni prese sul modello dati:
 - Rimosso il vecchio campo `status` (posseduto/in lettura/completato/da
   acquistare) — non richiesto/utile per un catalogo di proprietà.
