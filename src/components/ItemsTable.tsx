@@ -99,26 +99,18 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
                 </div>
               )}
 
-              <div className="relative">
-                <CoverImage item={item} className="aspect-[2/3] w-full" />
-                {item.has_obi === true && (
-                  <span
-                    title="Fascetta OBI presente"
-                    className="absolute bottom-1 left-1 flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[11px] shadow shadow-black/40"
-                  >
-                    🎗️
-                  </span>
-                )}
-              </div>
+              <CoverImage item={item} className="aspect-[2/3] w-full" />
 
               <div className="flex flex-1 flex-col gap-1 p-2.5 text-xs">
                 <div className="flex items-center justify-between gap-1">
                   <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px]">
                     {FORMAT_LABELS[item.format] ?? item.format}
                   </span>
-                  <span className="text-slate-500">
-                    {item.source === "mcp" ? "🤖" : "✍️"}
-                  </span>
+                  {item.has_obi === true && (
+                    <span title="Fascetta OBI presente" className="text-sm">
+                      🎗️
+                    </span>
+                  )}
                 </div>
                 <p className="line-clamp-2 font-medium text-slate-100" title={item.series ?? item.title}>
                   {item.series ?? item.title}
