@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -26,8 +26,13 @@ export default function ShareButton({
   const [slug, setSlug] = useState(initialSlug);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [origin, setOrigin] = useState("");
 
-  const shareUrl = slug ? `${window.location.origin}/c/${slug}` : "";
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+
+  const shareUrl = slug && origin ? `${origin}/c/${slug}` : "";
 
   async function handleToggle() {
     setLoading(true);
