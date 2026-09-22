@@ -34,16 +34,13 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
       if (search) {
         const q = search.toLowerCase();
         return (
-          item.title.toLowerCase().includes(q) ||
-          (item.series ?? "").toLowerCase().includes(q) ||
+          (item.series ?? item.title).toLowerCase().includes(q) ||
           (item.publisher ?? "").toLowerCase().includes(q)
         );
       }
       return true;
     });
   }, [items, formatFilter, search]);
-
-  const totalValue = filtered.reduce((sum, item) => sum + (item.estimated_value ?? 0), 0);
 
   async function handleDelete(id: string) {
     if (!confirm("Rimuovere questo elemento dalla collezione?")) return;
@@ -57,7 +54,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Cerca per titolo, serie, editore..."
+          placeholder="Cerca per serie, editore..."
           className="input max-w-xs"
         />
         <select
@@ -69,13 +66,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
           <option value="tankobon">Tankobon</option>
           <option value="zashi">Zashi</option>
         </select>
-        <div className="ml-auto rounded-lg bg-slate-900 px-4 py-2 text-sm">
-          <span className="text-slate-400">Valore stimato totale: </span>
-          <span className="font-semibold text-emerald-400">
-            {totalValue.toLocaleString("it-IT", { style: "currency", currency: "EUR" })}
-          </span>
-          <span className="ml-2 text-slate-500">({filtered.length} elementi)</span>
-        </div>
+        <span className="ml-auto text-sm text-slate-500">{filtered.length} elementi</span>
       </div>
 
       {filtered.length === 0 ? (
@@ -119,14 +110,13 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
                     {item.source === "mcp" ? "🤖" : "✍️"}
                   </span>
                 </div>
-                <p className="line-clamp-2 font-medium text-slate-100" title={item.title}>
-                  {item.title}
+                <p className="line-clamp-2 font-medium text-slate-100" title={item.series ?? item.title}>
+                  {item.series ?? item.title}
                 </p>
-                <p className="truncate text-slate-400" title={item.series ?? undefined}>
-                  {item.series ?? "-"}
+                <p className="truncate text-slate-400">
                   {(item.volume_number ?? item.issue_number) != null
-                    ? ` · #${item.volume_number ?? item.issue_number}`
-                    : ""}
+                    ? `#${item.volume_number ?? item.issue_number}`
+                    : "-"}
                   {item.release_year ? ` · ${item.release_year}` : ""}
                 </p>
                 <p className="truncate text-slate-500">
@@ -136,6 +126,9 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
                       ? "Ristampa"
                       : "-"}
                   {item.printing_notes ? ` (${item.printing_notes})` : ""}
+                </p>
+                <p className="truncate text-slate-500">
+                  {item.has_obi === true ? "Con OBI" : item.has_obi === false ? "Senza OBI" : ""}
                 </p>
                 <p className="truncate text-slate-500">{formatCondition(item)}</p>
                 <p className="mt-auto font-semibold text-emerald-400">

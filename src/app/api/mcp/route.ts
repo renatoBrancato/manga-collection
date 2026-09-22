@@ -32,8 +32,7 @@ function buildServer(userId: string) {
       description:
         "Salva un tankobon o un numero di rivista (zashi, es. Weekly Shonen Jump) nella collezione manga dell'utente autenticato, con i metadati estratti dalla foto (titolo, formato, numero, editore, prima stampa/ristampa dal colophon, grading o stima di condizione, valore stimato di mercato).",
       inputSchema: {
-        title: z.string().describe("Titolo dell'opera (es. 'One Piece') o nome della rivista"),
-        series: z.string().optional().describe("Nome della serie, se diverso dal titolo"),
+        series: z.string().describe("Nome della serie/opera (es. 'One Piece') o nome della rivista - campo principale"),
         format: z
           .enum(["tankobon", "zashi"])
           .default("tankobon")
@@ -53,6 +52,10 @@ function buildServer(userId: string) {
           .boolean()
           .optional()
           .describe("true se il colophon indica prima stampa/初版 (shohan); false se è una ristampa; ometti se non determinabile"),
+        has_obi: z
+          .boolean()
+          .optional()
+          .describe("true se il volume ha ancora la fascetta OBI originale, false se manca, ometti se non visibile/determinabile"),
         printing_notes: z.string().optional().describe("Note libere sulla stampa/edizione, es. '3a ristampa'"),
         grading_authority: z
           .enum(["CGC", "CBCS", "BGS", "altro"])
@@ -94,7 +97,7 @@ function buildServer(userId: string) {
         content: [
           {
             type: "text",
-            text: `Aggiunto alla collezione: "${item.title}"${item.volume_number ? ` vol. ${item.volume_number}` : ""}${
+            text: `Aggiunto alla collezione: "${item.series ?? item.title}"${item.volume_number ? ` vol. ${item.volume_number}` : ""}${
               item.issue_number ? ` n. ${item.issue_number}` : ""
             }${item.estimated_value != null ? ` — valore stimato ${item.estimated_value} ${item.currency}` : ""}.${
               imageWarning ? ` ⚠️ ${imageWarning}` : ""
@@ -113,8 +116,7 @@ function buildServer(userId: string) {
         "Aggiorna solo i campi specificati di un volume/rivista già presente nella collezione (es. cambiare grading dopo il ritorno dall'ente, aggiungere una foto in un secondo momento, correggere il valore stimato). I campi omessi restano invariati. Usa 'list_manga_items' per trovare l'id corretto se non lo conosci già.",
       inputSchema: {
         id: z.string().uuid().describe("ID dell'elemento da aggiornare, ottenuto da 'list_manga_items'"),
-        title: z.string().optional(),
-        series: z.string().optional(),
+        series: z.string().optional().describe("Nome della serie/opera o della rivista"),
         format: z.enum(["tankobon", "zashi"]).optional(),
         volume_number: z.number().optional(),
         issue_number: z.string().optional(),
@@ -122,6 +124,7 @@ function buildServer(userId: string) {
         publisher: z.string().optional(),
         isbn: z.string().optional(),
         is_first_print: z.boolean().optional(),
+        has_obi: z.boolean().optional().describe("true se ha la fascetta OBI, false se manca"),
         printing_notes: z.string().optional(),
         grading_authority: z
           .enum(["CGC", "CBCS", "BGS", "altro"])
@@ -157,7 +160,7 @@ function buildServer(userId: string) {
         content: [
           {
             type: "text",
-            text: `Aggiornato: "${updated!.title}" (id ${updated!.id}). Campi modificati: ${changedFields.join(", ") || "nessuno"}.${
+            text: `Aggiornato: "${updated!.series ?? updated!.title}" (id ${updated!.id}). Campi modificati: ${changedFields.join(", ") || "nessuno"}.${
               imageWarning ? ` ⚠️ ${imageWarning}` : ""
             }`,
           },

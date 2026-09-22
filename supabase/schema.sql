@@ -18,7 +18,7 @@ create unique index if not exists profiles_api_key_idx on public.profiles (api_k
 create table if not exists public.items (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles (id) on delete cascade,
-  title text not null,
+  title text not null,          -- (legacy, sempre allineato a series) usare series come campo principale
   series text,
   format text not null default 'tankobon' check (format in ('tankobon', 'zashi')), -- tankobon (volume) | zashi (rivista, es. Weekly Shonen Jump)
   volume_number numeric,       -- numero volume (tankobon)
@@ -28,6 +28,7 @@ create table if not exists public.items (
   publisher text,
   isbn text,
   is_first_print boolean,      -- vero se prima stampa/初版 (rilevata dal colophon)
+  has_obi boolean,             -- vero se presente la fascetta OBI originale
   printing_notes text,         -- es. "3a ristampa", note libere sulla stampa/edizione
   grading_authority text check (grading_authority is null or grading_authority in ('CGC', 'CBCS', 'BGS', 'altro')),
   grading_value numeric,       -- es. 9.8, se gradato da un ente

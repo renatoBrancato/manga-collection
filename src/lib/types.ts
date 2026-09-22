@@ -13,6 +13,7 @@ export interface MangaItem {
   publisher: string | null;
   isbn: string | null;
   is_first_print: boolean | null;
+  has_obi: boolean | null;
   printing_notes: string | null;
   grading_authority: GradingAuthority | null;
   grading_value: number | null;
@@ -29,8 +30,10 @@ export interface MangaItem {
 
 /** Payload shape accepted from the manual form, the REST endpoint, and the MCP tool. */
 export interface IncomingItemPayload {
-  title: string;
+  /** Nome della serie/opera (es. "One Piece") o della rivista - campo principale, sostituisce il vecchio "titolo". */
   series?: string;
+  /** Deprecato: usato solo come fallback se 'series' non è fornito (retrocompatibilità MCP). */
+  title?: string;
   format?: ItemFormat;
   volume_number?: number;
   issue_number?: string;
@@ -38,6 +41,7 @@ export interface IncomingItemPayload {
   publisher?: string;
   isbn?: string;
   is_first_print?: boolean;
+  has_obi?: boolean;
   printing_notes?: string;
   grading_authority?: GradingAuthority;
   grading_value?: number;

@@ -56,10 +56,14 @@ async function resolveImage<T extends { image_url?: string; image_base64?: strin
 }
 
 function toRow(userId: string, item: IncomingItemPayload, source: "manual" | "mcp") {
+  // "series" è ora il campo principale (nome dell'opera/rivista); "title"
+  // resta in DB (colonna NOT NULL, usata anche da vecchie versioni
+  // dell'MCP) ma viene sempre allineato a "series" se non fornito a parte.
+  const series = item.series ?? item.title ?? null;
   return {
     user_id: userId,
-    title: item.title,
-    series: item.series ?? null,
+    title: item.title ?? series ?? "Senza nome",
+    series,
     format: item.format ?? "tankobon",
     volume_number: item.volume_number ?? null,
     issue_number: item.issue_number ?? null,
@@ -67,6 +71,7 @@ function toRow(userId: string, item: IncomingItemPayload, source: "manual" | "mc
     publisher: item.publisher ?? null,
     isbn: item.isbn ?? null,
     is_first_print: item.is_first_print ?? null,
+    has_obi: item.has_obi ?? null,
     printing_notes: item.printing_notes ?? null,
     grading_authority: item.grading_authority ?? null,
     grading_value: item.grading_value ?? null,
@@ -85,9 +90,9 @@ export async function insertItems(
   items: IncomingItemPayload[],
   source: "manual" | "mcp"
 ): Promise<{ inserted: MangaItem[]; error?: string; imageWarning?: string }> {
-  const valid = items.filter((item) => item && item.title);
+  const valid = items.filter((item) => item && (item.series || item.title));
   if (valid.length === 0) {
-    return { inserted: [], error: "No valid items ('title' is required)" };
+    return { inserted: [], error: "No valid items ('series' is required)" };
   }
 
   const resolved = await Promise.all(valid.map((item) => resolveImage(userId, item)));
@@ -110,6 +115,12 @@ export async function updateItem(
   patch: Partial<IncomingItemPayload>
 ): Promise<{ updated: MangaItem | null; error?: string; imageWarning?: string }> {
   const { item: resolvedPatch, error: imageWarning } = await resolveImage(userId, patch);
+
+  // "title" resta allineato a "series" quando quest'ultimo viene aggiornato
+  // senza specificare esplicitamente un titolo diverso (retrocompatibilità).
+  if (resolvedPatch.series && !resolvedPatch.title) {
+    resolvedPatch.title = resolvedPatch.series;
+  }
 
   // Only include fields explicitly provided in the patch, so omitted fields
   // are left untouched (this is a true partial update, not an upsert).

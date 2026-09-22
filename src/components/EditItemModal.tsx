@@ -24,8 +24,8 @@ export default function EditItemModal({ item, onClose }: { item: MangaItem; onCl
   const [error, setError] = useState<string | null>(null);
 
   const previewItem = imageFile
-    ? { title: item.title, image_url: null, isbn: null } // real preview handled below via object URL
-    : { title: item.title, image_url: imageUrl || null, isbn: item.isbn };
+    ? { title: item.series ?? item.title, image_url: null, isbn: null } // real preview handled below via object URL
+    : { title: item.series ?? item.title, image_url: imageUrl || null, isbn: item.isbn };
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -34,10 +34,11 @@ export default function EditItemModal({ item, onClose }: { item: MangaItem; onCl
 
     const form = new FormData(e.currentTarget);
     const isFirstPrintRaw = String(form.get("is_first_print") || "");
+    const hasObiRaw = String(form.get("has_obi") || "");
 
     const patch: Record<string, unknown> = {
-      title: String(form.get("title") || ""),
-      series: String(form.get("series") || "") || null,
+      series: String(form.get("series") || ""),
+      title: String(form.get("series") || ""),
       format,
       volume_number:
         format === "tankobon" && form.get("volume_number") ? Number(form.get("volume_number")) : null,
@@ -46,6 +47,7 @@ export default function EditItemModal({ item, onClose }: { item: MangaItem; onCl
       publisher: String(form.get("publisher") || "") || null,
       isbn: String(form.get("isbn") || "") || null,
       is_first_print: isFirstPrintRaw === "" ? null : isFirstPrintRaw === "true",
+      has_obi: hasObiRaw === "" ? null : hasObiRaw === "true",
       printing_notes: String(form.get("printing_notes") || "") || null,
       grading_authority: graded ? String(form.get("grading_authority") || "") || null : null,
       grading_value: graded && form.get("grading_value") ? Number(form.get("grading_value")) : null,
@@ -124,8 +126,13 @@ export default function EditItemModal({ item, onClose }: { item: MangaItem; onCl
             <option value="tankobon">Tankobon (volume)</option>
             <option value="zashi">Zashi (rivista, es. Shonen Jump)</option>
           </select>
-          <input name="title" required defaultValue={item.title} placeholder="Titolo *" className="input" />
-          <input name="series" defaultValue={item.series ?? ""} placeholder="Serie" className="input" />
+          <input
+            name="series"
+            required
+            defaultValue={item.series ?? item.title}
+            placeholder="Serie/Titolo *"
+            className="input"
+          />
 
           {format === "tankobon" ? (
             <input
@@ -162,6 +169,11 @@ export default function EditItemModal({ item, onClose }: { item: MangaItem; onCl
             <option value="">Prima stampa? (non specificato)</option>
             <option value="true">Sì, prima stampa (初版)</option>
             <option value="false">No, ristampa</option>
+          </select>
+          <select name="has_obi" defaultValue={item.has_obi == null ? "" : String(item.has_obi)} className="input">
+            <option value="">Fascetta OBI? (non specificato)</option>
+            <option value="true">Sì, presente</option>
+            <option value="false">No, assente</option>
           </select>
           <input
             name="printing_notes"
