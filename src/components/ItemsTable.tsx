@@ -99,7 +99,17 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
                 </div>
               )}
 
-              <CoverImage item={item} className="aspect-[2/3] w-full" />
+              <div className="relative">
+                <CoverImage item={item} className="aspect-[2/3] w-full" />
+                {item.has_obi === true && (
+                  <span
+                    title="Fascetta OBI presente"
+                    className="absolute bottom-1 left-1 flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[11px] shadow shadow-black/40"
+                  >
+                    🎗️
+                  </span>
+                )}
+              </div>
 
               <div className="flex flex-1 flex-col gap-1 p-2.5 text-xs">
                 <div className="flex items-center justify-between gap-1">
@@ -126,9 +136,6 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
                       ? "Ristampa"
                       : "-"}
                   {item.printing_notes ? ` (${item.printing_notes})` : ""}
-                </p>
-                <p className="truncate text-slate-500">
-                  {item.has_obi === true ? "Con OBI" : item.has_obi === false ? "Senza OBI" : ""}
                 </p>
                 <p className="truncate text-slate-500">{formatCondition(item)}</p>
                 <p className="mt-auto font-semibold text-emerald-400">
