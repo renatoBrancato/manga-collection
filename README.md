@@ -89,7 +89,7 @@ Per testare in locale da VS Code (Agent Mode), vedi
 - `src/app/login` - login Google
 - `src/app/dashboard` - collezione dell'utente, filtri, valore totale
 - `src/app/settings` - API key personale + istruzioni connettore MCP
-- `src/app/api/mcp` - server MCP (add_manga_item, list_manga_items)
+- `src/app/api/mcp` - server MCP (aggiunta, aggiornamento, elenco e rivalutazione via West Blue)
 - `src/app/api/collection` - endpoint REST alternativo, utile per test manuali
 - `src/app/api/auth/callback` - callback OAuth Supabase
 - `supabase/migrations/` - storico migrazioni SQL (gestito da Supabase CLI)

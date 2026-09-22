@@ -101,14 +101,19 @@ completo e `supabase/migrations/` per lo schema SQL):
 | `estimated_value` + `currency` | valore di mercato stimato |
 | `source` | `manual` (form) o `mcp` (inserito via ChatGPT) |
 
-**Fonte prezzi consigliata**: per `estimated_value`, il server MCP istruisce
-ChatGPT (via `instructions` del server + descrizione del campo) a
-controllare prima https://westblue.shop/pages/manga-price-tracker,
-cercando la serie/volume con lo stato corretto (raw vs graded, con/senza
-OBI) e usando la media delle vendite recenti compatibili con quel volume.
-Non è un'integrazione automatica (il sito non ha un'API pubblica): è
-ChatGPT stesso, leggendo le istruzioni del tool, a visitare la pagina e
-riportare il prezzo trovato.
+**Fonte prezzi primaria**: per `estimated_value`, il server MCP istruisce
+ChatGPT (via `instructions` del server + descrizione dei campi) a consultare
+https://westblue.shop/pages/manga-price-tracker e usare la media mostrata
+solo per vendite compatibili con edizione, raw/graded, ente/voto, OBI e
+stampa. Se non ci sono dati compatibili, il valore resta invariato/omesso:
+non vengono usati fallback silenziosi o filtri più larghi.
+
+Il tool `revalue_manga_collection` prepara i criteri di ricerca per tutti gli
+elementi (o solo quelli senza prezzo); ChatGPT deve poi visitare West Blue e
+chiamare `update_manga_item` per ogni valore verificato. Il prompt MCP
+`rivaluta_collezione` avvia lo stesso workflow nei client che supportano i
+prompt/comandi. Non è scraping automatico lato backend: la navigazione e la
+lettura del tracker sono eseguite dal client AI.
 
 Decisioni prese sul modello dati:
 - Rimosso il vecchio campo `status` (posseduto/in lettura/completato/da

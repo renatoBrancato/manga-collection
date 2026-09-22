@@ -22,18 +22,70 @@ function getApiKeyFromRequest(req: Request): string | null {
   return bearer || null;
 }
 
-const PRICE_TRACKER_INSTRUCTIONS = `Prima di salvare o aggiornare 'estimated_value' per un volume, consulta il
-Manga Price Tracker di West Blue Collectibles: https://westblue.shop/pages/manga-price-tracker
-Come stimare il prezzo:
-1. Cerca la serie/titolo esatto e, se noto, il numero di volume/capitolo.
-2. Filtra per lo stato corretto del pezzo che stai valutando: RAW (non gradato)
-   vs graded (CGC/CBCS/BGS), e CON OBI vs SENZA OBI — sono fasce di prezzo
-   molto diverse tra loro, non mischiarle.
-3. Se il tracker mostra più vendite/prezzo medio per quei criteri, usa la
-   MEDIA delle vendite recenti compatibili con lo stato reale del volume
-   fotografato (grading, OBI, prima stampa) come 'estimated_value'.
-4. Se il tracker non ha dati per quel titolo/stato, cerca comunque un prezzo
-   di mercato plausibile sul web e indicalo, oppure ometti il campo.`;
+const PRICE_TRACKER_URL = "https://westblue.shop/pages/manga-price-tracker";
+
+const PRICE_TRACKER_INSTRUCTIONS = `REGOLE OBBLIGATORIE PER LE VALUTAZIONI
+
+La fonte primaria per 'estimated_value' è il Manga Price Tracker di West Blue
+Collectibles: ${PRICE_TRACKER_URL}
+
+Prima di aggiungere, aggiornare o rivalutare un elemento:
+1. Identifica l'edizione esatta: serie, volume/numero, lingua, anno, prima
+   stampa/ristampa, stato RAW o graded, ente/voto di grading e presenza OBI.
+2. Cerca l'elemento su West Blue e applica filtri compatibili con il pezzo:
+   - RAW e graded non devono mai essere mescolati;
+   - con OBI e senza OBI non devono mai essere mescolati;
+   - per un graded usa, quando disponibile, lo stesso ente e lo stesso voto;
+   - non usare dati di una prima stampa per una ristampa o viceversa.
+3. Usa la MEDIA mostrata dal tracker per quella combinazione esatta di filtri,
+   basata sulle vendite recenti. Non scegliere il prezzo più alto e non fare
+   una media manuale tra categorie differenti.
+4. Se un attributo decisivo non è noto (per esempio OBI o prima stampa), non
+   inventarlo: chiedi chiarimenti oppure non valorizzare il prezzo.
+5. Se West Blue non contiene vendite compatibili, dichiaralo chiaramente e
+   lascia 'estimated_value' invariato/omesso. Non sostituire silenziosamente
+   la fonte e non allargare i filtri solo per ottenere un risultato.
+6. West Blue può mostrare USD: converti la media in EUR al cambio corrente,
+   salva 'currency' come EUR e comunica sinteticamente media originale,
+   cambio applicato e risultato arrotondato a due decimali.
+
+Per rivalutare tutta la collezione usa prima 'revalue_manga_collection', poi
+consulta West Blue per ogni elemento restituito e chiama 'update_manga_item'
+solo per quelli con una media compatibile. Non fermarti alla sola lista.`;
+
+function buildValuationCandidate(item: Awaited<ReturnType<typeof listItems>>[number]) {
+  return {
+    id: item.id,
+    series: item.series ?? item.title,
+    format: item.format,
+    volume_number: item.volume_number,
+    issue_number: item.issue_number,
+    release_year: item.release_year,
+    language: item.language,
+    publisher: item.publisher,
+    printing: item.is_first_print === true ? "first_print" : item.is_first_print === false ? "reprint" : "unknown",
+    obi: item.has_obi === true ? "with_obi" : item.has_obi === false ? "without_obi" : "unknown",
+    market_state: item.grading_authority
+      ? {
+          type: "graded",
+          authority: item.grading_authority,
+          grade: item.grading_value,
+        }
+      : {
+          type: "raw",
+          condition: item.condition_estimate,
+        },
+    current_estimated_value: item.estimated_value,
+    current_currency: item.currency,
+    search_instruction:
+      `Cerca "${item.series ?? item.title}"` +
+      `${item.volume_number != null ? ` volume ${item.volume_number}` : ""}` +
+      `${item.issue_number ? ` numero ${item.issue_number}` : ""}` +
+      ` come ${item.grading_authority ? `graded ${item.grading_authority}${item.grading_value != null ? ` ${item.grading_value}` : ""}` : "RAW"}` +
+      `${item.has_obi === true ? ", con OBI" : item.has_obi === false ? ", senza OBI" : ", OBI non noto"}` +
+      `${item.is_first_print === true ? ", prima stampa" : item.is_first_print === false ? ", ristampa" : ", stampa non nota"}.`,
+  };
+}
 
 function buildServer(userId: string) {
   const server = new McpServer(
@@ -87,7 +139,7 @@ function buildServer(userId: string) {
           .number()
           .optional()
           .describe(
-            "Valore di mercato stimato in euro. PRIMA di compilarlo, controlla https://westblue.shop/pages/manga-price-tracker cercando la serie/volume con lo stato giusto (raw/graded, con/senza OBI) e usa la media delle vendite recenti compatibili; se assente, cerca un prezzo plausibile altrove sul web."
+            `Valore di mercato in EUR. Prima consulta ${PRICE_TRACKER_URL}, usa esclusivamente la media mostrata per filtri compatibili (edizione, raw/graded, ente/voto, con/senza OBI, prima stampa/ristampa). Se non ci sono dati compatibili, ometti il campo; non usare automaticamente altre fonti.`
           ),
         currency: z.string().default("EUR"),
         image_url: z
@@ -155,7 +207,7 @@ function buildServer(userId: string) {
           .number()
           .optional()
           .describe(
-            "Valore di mercato stimato in euro. Ricontrolla su https://westblue.shop/pages/manga-price-tracker con lo stato giusto (raw/graded, con/senza OBI) e usa la media delle vendite compatibili."
+            `Valore di mercato in EUR. Ricontrolla su ${PRICE_TRACKER_URL} e usa soltanto la media per filtri compatibili (raw/graded, ente/voto, con/senza OBI, prima stampa/ristampa). Se non ci sono dati compatibili, lascia il valore invariato.`
           ),
         currency: z.string().optional(),
         image_url: z
@@ -190,6 +242,80 @@ function buildServer(userId: string) {
         ],
       };
     }
+  );
+
+  server.registerTool(
+    "revalue_manga_collection",
+    {
+      title: "Rivaluta la collezione",
+      description:
+        `Prepara la rivalutazione della collezione usando ${PRICE_TRACKER_URL}. Dopo aver ricevuto l'elenco, il client DEVE visitare il tracker per ogni elemento, applicare i criteri indicati, leggere la media compatibile e aggiornare il prezzo tramite 'update_manga_item'. Non è sufficiente mostrare l'elenco all'utente.`,
+      inputSchema: {
+        scope: z
+          .enum(["all", "missing_value"])
+          .default("all")
+          .describe("'all' rivaluta tutti gli elementi; 'missing_value' considera solo quelli senza valore stimato"),
+      },
+    },
+    async ({ scope }) => {
+      const items = await listItems(userId);
+      const selected = scope === "missing_value" ? items.filter((item) => item.estimated_value == null) : items;
+      const candidates = selected.map(buildValuationCandidate);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                action_required:
+                  "Continua ora la procedura: visita West Blue per ciascun candidato, usa la media mostrata solo con filtri compatibili e chiama update_manga_item per ogni prezzo verificato. Non limitarti a presentare questa lista.",
+                source: PRICE_TRACKER_URL,
+                valuation_rules: [
+                  "Non mescolare RAW e graded.",
+                  "Non mescolare con OBI e senza OBI.",
+                  "Per i graded abbina ente e voto quando disponibili.",
+                  "Non mescolare prima stampa e ristampa.",
+                  "Se OBI/stampa sono sconosciuti, chiedi chiarimenti o non aggiornare.",
+                  "Se non esistono vendite compatibili, lascia il valore invariato e segnalalo.",
+                  "Se la media è in USD, convertila in EUR al cambio corrente e comunica il calcolo.",
+                ],
+                count: candidates.length,
+                candidates,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+  );
+
+  server.registerPrompt(
+    "rivaluta_collezione",
+    {
+      title: "Rivaluta la collezione manga",
+      description:
+        "Avvia la rivalutazione completa usando le medie del Manga Price Tracker di West Blue e aggiorna i valori verificati.",
+      argsSchema: {
+        scope: z.enum(["all", "missing_value"]).optional(),
+      },
+    },
+    ({ scope }) => ({
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text:
+              `Rivaluta la mia collezione (${scope ?? "all"}). ` +
+              "Chiama revalue_manga_collection, poi visita West Blue per ogni candidato, applica esattamente i filtri richiesti e usa la media mostrata. " +
+              "Aggiorna con update_manga_item soltanto gli elementi con dati compatibili e alla fine riepiloga valori precedenti, nuovi valori, elementi non aggiornati e motivazione.",
+          },
+        },
+      ],
+    })
   );
 
   server.registerTool(
