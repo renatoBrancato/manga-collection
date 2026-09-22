@@ -90,7 +90,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
               className="group relative flex flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50 transition hover:border-slate-600"
             >
               {!readOnly && (
-                <div className="absolute right-1.5 top-1.5 z-10 hidden gap-1 group-hover:flex">
+                <div className="absolute right-1.5 top-1.5 z-10 flex gap-1 opacity-90 transition sm:opacity-0 sm:group-hover:opacity-100">
                   <button
                     onClick={() => setEditingItem(item)}
                     className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-950/80 text-slate-300 transition hover:text-indigo-400"
