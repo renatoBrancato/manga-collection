@@ -53,6 +53,16 @@ rivista come Weekly Shonen Jump (zashi):
 Non inventare mai ISBN, editore o data se non sono leggibili nella foto:
 lascia il campo vuoto e chiedimi un'altra foto più chiara se necessario.
 
+## Dimensione delle immagini
+
+Prima di inviare `image_base64`, ridimensiona la foto a massimo **1600 px**
+sul lato lungo e comprimila preferibilmente in JPEG/WebP. Il file decodificato
+deve essere al massimo **2 MB** (circa 2,7 MB come testo base64); sono
+consigliati 300-800 KB. Non inviare direttamente la foto originale ad alta
+risoluzione del telefono: può superare il limite della richiesta. Se il client
+non può comprimerla, salva prima i metadati senza immagine e aggiungila in un
+secondo momento.
+
 ## Rivalutazione della collezione
 
 Quando chiedo di rivalutare la collezione:

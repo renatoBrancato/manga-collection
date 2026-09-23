@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 
 const BUCKET = "covers";
+export const MAX_COVER_IMAGE_BYTES = 2_000_000;
 
 const MIME_EXT: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -38,6 +39,11 @@ export async function uploadCoverImage(
   }
   if (buffer.length === 0) {
     return { error: "image_base64 è vuoto o non decodificabile" };
+  }
+  if (buffer.length > MAX_COVER_IMAGE_BYTES) {
+    return {
+      error: `L'immagine supera il limite di ${MAX_COVER_IMAGE_BYTES / 1_000_000} MB. Ridimensionala a massimo 1600 px e comprimila prima di inviarla.`,
+    };
   }
 
   const ext = MIME_EXT[mime] ?? "jpg";

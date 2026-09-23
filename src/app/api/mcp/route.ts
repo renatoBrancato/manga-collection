@@ -49,6 +49,17 @@ Prima di aggiungere, aggiornare o rivalutare un elemento:
    salva 'currency' come EUR e comunica sinteticamente media originale,
    cambio applicato e risultato arrotondato a due decimali.
 
+REGOLE OBBLIGATORIE PER LE IMMAGINI
+- 'image_base64' deve rappresentare un'immagine JPEG/PNG/WebP/GIF di massimo
+  2 MB una volta decodificata (circa 2,7 MB di testo base64).
+- Prima della chiamata ridimensiona preferibilmente la foto a massimo 1600 px
+  sul lato lungo e comprimila in JPEG/WebP; una copertina da 300-800 KB è
+  sufficiente per la dashboard.
+- Non inviare la foto originale ad alta risoluzione del telefono: può superare
+  i limiti della richiesta prima ancora che il server MCP possa rispondere.
+- Se il client non può ridimensionare/comprimere, ometti 'image_base64' e
+  salva prima i metadati; l'immagine potrà essere aggiunta successivamente.
+
 Per rivalutare tutta la collezione usa prima 'revalue_manga_collection', poi
 consulta West Blue per ogni elemento restituito e chiama 'update_manga_item'
 solo per quelli con una media compatibile. Non fermarti alla sola lista.`;
@@ -152,7 +163,7 @@ function buildServer(userId: string) {
           .string()
           .optional()
           .describe(
-            "Foto del volume/copertina codificata in base64 (o data URI 'data:image/jpeg;base64,...'). USA SEMPRE QUESTO CAMPO quando l'immagine è una foto scattata o allegata dall'utente in chat (il caso più comune): leggi i byte del file allegato e passali qui, verranno caricati automaticamente e compariranno nella dashboard."
+            "Foto del volume/copertina in base64 o data URI. LIMITE: massimo 2 MB dopo la decodifica (circa 2,7 MB come testo base64); prima ridimensiona a massimo 1600 px sul lato lungo e comprimi preferibilmente in JPEG/WebP (300-800 KB consigliati). Non inviare foto originali ad alta risoluzione. Se non puoi comprimerla, ometti il campo e aggiungi l'immagine successivamente."
           ),
         notes: z.string().optional(),
       },
@@ -220,7 +231,7 @@ function buildServer(userId: string) {
           .string()
           .optional()
           .describe(
-            "Foto codificata in base64 (o data URI) da aggiungere/sostituire per questo volume, es. quando l'utente scatta/allega la foto solo dopo aver già salvato l'item. Usa sempre questo per foto scattate in chat."
+            "Foto in base64/data URI da aggiungere o sostituire. LIMITE: massimo 2 MB decodificati (circa 2,7 MB base64); ridimensiona prima a massimo 1600 px e comprimi in JPEG/WebP, idealmente 300-800 KB. Non inviare l'originale ad alta risoluzione."
           ),
         notes: z.string().optional(),
       },
