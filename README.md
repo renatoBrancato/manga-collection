@@ -45,11 +45,21 @@ Foto volume -> ChatGPT (connettore MCP personale, Developer Mode)
 
 ### 2. Variabili d'ambiente
 
-Copia `.env.example` in `.env.local` e compila i valori Supabase.
+Copia `.env.example` in `.env.local` e compila i valori Supabase e OpenAI.
 
 ```bash
 cp .env.example .env.local
 ```
+
+Per la chat AI nella dashboard servono:
+
+```env
+OPENAI_API_KEY=...
+OPENAI_CHAT_MODEL=gpt-5-mini
+```
+
+La chiave OpenAI resta esclusivamente lato server e non viene inviata al
+browser.
 
 ### 3. Avvio locale
 
@@ -89,6 +99,9 @@ Per testare in locale da VS Code (Agent Mode), vedi
 - `src/app/login` - login Google
 - `src/app/dashboard` - collezione dell'utente, filtri, valore totale
 - `src/app/settings` - API key personale + istruzioni connettore MCP
+- `src/app/api/chat` - chat AI con vision e function calling
+- `src/app/api/chat/image` - upload multipart delle immagini della chat
+- `src/app/api/chat/action` - conferma ed esecuzione delle azioni preparate dall'AI
 - `src/app/api/mcp` - server MCP (aggiunta, aggiornamento, elenco e rivalutazione via West Blue)
 - `src/app/api/collection` - endpoint REST alternativo, utile per test manuali
 - `src/app/api/auth/callback` - callback OAuth Supabase

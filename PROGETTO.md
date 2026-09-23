@@ -15,6 +15,9 @@ valore economico. L'utente può aggiungere i volumi:
 2. **Facendo una foto** al volume/rivista e passandola a ChatGPT, che
    estrae i metadati e li invia all'app tramite un **server MCP** esposto
    dall'app stessa (vedi sezione 4).
+3. **Dalla chat AI integrata nella dashboard**, allegando facoltativamente
+   una foto. La foto viene compressa nel browser, caricata su Supabase
+   Storage e passata a OpenAI come URL per l'analisi vision.
 
 Deploy pubblico: **https://manga-collection-seven.vercel.app**
 Repo: `https://github.com/renatoBrancato/manga-collection`
@@ -28,6 +31,7 @@ Repo: `https://github.com/renatoBrancato/manga-collection`
 | Auth | Supabase Auth (Google OAuth) |
 | Database | Supabase Postgres, con Row Level Security |
 | Integrazione AI | MCP (Model Context Protocol) server custom, in `/api/mcp` |
+| Chat interna | OpenAI Responses API con vision e function calling |
 | Gestione schema DB | Supabase CLI, migrazioni in `supabase/migrations/` |
 
 ## 3. Come funziona l'autenticazione / sicurezza dati
@@ -114,6 +118,21 @@ chiamare `update_manga_item` per ogni valore verificato. Il prompt MCP
 `rivaluta_collezione` avvia lo stesso workflow nei client che supportano i
 prompt/comandi. Non è scraping automatico lato backend: la navigazione e la
 lettura del tracker sono eseguite dal client AI.
+
+### Chat AI nella dashboard
+
+La chat interna usa `OPENAI_API_KEY` e `OPENAI_CHAT_MODEL` esclusivamente
+lato server. Il modello dispone di tool di sola lettura
+(`search_collection`, `get_collection_summary`) e tool preparatori
+(`prepare_add_manga`, `prepare_update_manga`). Questi ultimi non scrivono
+nel database: restituiscono una proposta mostrata nella UI, e solo il
+pulsante **Conferma** chiama `/api/chat/action`, che riusa `insertItems()`
+o `updateItem()`.
+
+Le immagini non transitano come base64 nel JSON della chat: il browser le
+riduce e le invia in multipart a `/api/chat/image`; il server le salva nel
+bucket `covers` e passa a OpenAI il relativo URL pubblico. Lo stesso URL
+viene inserito automaticamente nella proposta di aggiunta o aggiornamento.
 
 Decisioni prese sul modello dati:
 - Rimosso il vecchio campo `status` (posseduto/in lettura/completato/da

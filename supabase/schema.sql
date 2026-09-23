@@ -38,7 +38,7 @@ create table if not exists public.items (
   currency text default 'EUR',
   image_url text,
   notes text,
-  source text default 'manual', -- 'manual' | 'mcp'
+  source text default 'manual', -- 'manual' | 'mcp' | 'chat'
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

@@ -6,6 +6,7 @@ import AddItemForm from "@/components/AddItemForm";
 import LogoutButton from "@/components/LogoutButton";
 import KpiBar from "@/components/KpiBar";
 import ShareButton from "@/components/ShareButton";
+import AiChatPanel from "@/components/AiChatPanel";
 import type { MangaItem } from "@/lib/types";
 
 export default async function DashboardPage() {
@@ -48,7 +49,7 @@ export default async function DashboardPage() {
       </div>
 
       <ItemsTable items={(items ?? []) as MangaItem[]} />
+      <AiChatPanel />
     </main>
   );
 }
-

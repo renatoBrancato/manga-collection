@@ -46,6 +46,26 @@ export async function uploadCoverImage(
     };
   }
 
+  return uploadCoverBuffer(userId, buffer, mime);
+}
+
+export async function uploadCoverBuffer(
+  userId: string,
+  buffer: Buffer,
+  mime: string
+): Promise<{ url: string } | { error: string }> {
+  if (!mime.startsWith("image/")) {
+    return { error: "Il file fornito non è un'immagine" };
+  }
+  if (buffer.length === 0) {
+    return { error: "L'immagine è vuota" };
+  }
+  if (buffer.length > MAX_COVER_IMAGE_BYTES) {
+    return {
+      error: `L'immagine supera il limite di ${MAX_COVER_IMAGE_BYTES / 1_000_000} MB. Ridimensionala a massimo 1600 px e comprimila prima di inviarla.`,
+    };
+  }
+
   const ext = MIME_EXT[mime] ?? "jpg";
   const path = `${userId}/${crypto.randomUUID()}.${ext}`;
 

@@ -28,7 +28,7 @@ export async function resolveUserIdByApiKey(apiKey: string | null | undefined): 
  * fallback chain (ISBN lookup, then placeholder) takes over instead of a
  * permanently broken image. Mutates a copy, never the input.
  */
-async function resolveImage<T extends { image_url?: string; image_base64?: string }>(
+async function resolveImage<T extends { image_url?: string | null; image_base64?: string | null }>(
   userId: string,
   item: T
 ): Promise<{ item: T; error?: string }> {
@@ -43,7 +43,10 @@ async function resolveImage<T extends { image_url?: string; image_base64?: strin
   }
 
   if (item.image_url) {
-    const valid = await validateDirectImageUrl(item.image_url);
+    const storagePrefix = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/covers/`;
+    const valid = item.image_url.startsWith(storagePrefix)
+      ? item.image_url
+      : await validateDirectImageUrl(item.image_url);
     if (!valid) {
       return {
         item: { ...item, image_url: undefined },
@@ -55,7 +58,7 @@ async function resolveImage<T extends { image_url?: string; image_base64?: strin
   return { item };
 }
 
-function toRow(userId: string, item: IncomingItemPayload, source: "manual" | "mcp") {
+function toRow(userId: string, item: IncomingItemPayload, source: "manual" | "mcp" | "chat") {
   // "series" è ora il campo principale (nome dell'opera/rivista); "title"
   // resta in DB (colonna NOT NULL, usata anche da vecchie versioni
   // dell'MCP) ma viene sempre allineato a "series" se non fornito a parte.
@@ -88,7 +91,7 @@ function toRow(userId: string, item: IncomingItemPayload, source: "manual" | "mc
 export async function insertItems(
   userId: string,
   items: IncomingItemPayload[],
-  source: "manual" | "mcp"
+  source: "manual" | "mcp" | "chat"
 ): Promise<{ inserted: MangaItem[]; error?: string; imageWarning?: string }> {
   const valid = items.filter((item) => item && (item.series || item.title));
   if (valid.length === 0) {

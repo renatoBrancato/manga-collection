@@ -42,7 +42,7 @@ function blobToDataUrl(blob: Blob): Promise<string> {
  * the PATCH JSON body. Keeping the binary below 1.5 MB also keeps the base64
  * request comfortably below common serverless request limits.
  */
-export async function prepareCoverForUpload(file: File): Promise<string> {
+export async function prepareCoverBlob(file: File): Promise<Blob> {
   if (!file.type.startsWith("image/")) {
     throw new Error("Il file selezionato non è un'immagine");
   }
@@ -75,5 +75,9 @@ export async function prepareCoverForUpload(file: File): Promise<string> {
     throw new Error("L'immagine resta troppo grande anche dopo la compressione; scegline una più piccola");
   }
 
-  return blobToDataUrl(blob);
+  return blob;
+}
+
+export async function prepareCoverForUpload(file: File): Promise<string> {
+  return blobToDataUrl(await prepareCoverBlob(file));
 }
