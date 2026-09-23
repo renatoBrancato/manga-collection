@@ -13,6 +13,26 @@ type ChatMessage = {
   actions?: ChatAction[];
 };
 
+const FIELD_LABELS: Record<string, string> = {
+  series: "Serie",
+  format: "Formato",
+  volume_number: "Volume",
+  issue_number: "Numero",
+  release_year: "Anno",
+  publisher: "Editore",
+  isbn: "ISBN",
+  is_first_print: "Prima stampa",
+  has_obi: "OBI",
+  printing_notes: "Stampa",
+  grading_authority: "Grading",
+  grading_value: "Voto",
+  condition_estimate: "Condizione",
+  language: "Lingua",
+  estimated_value: "Valore",
+  currency: "Valuta",
+  notes: "Note",
+};
+
 function actionTitle(action: ChatAction): string {
   if (action.type === "add") {
     const number = action.payload.volume_number ?? action.payload.issue_number;
@@ -25,7 +45,16 @@ function actionDetails(action: ChatAction): Array<[string, string]> {
   const ignored = new Set(["id", "image_url"]);
   return Object.entries(action.payload)
     .filter(([key, value]) => !ignored.has(key) && value !== undefined && value !== "")
-    .map(([key, value]) => [key, value === null ? "svuota il campo" : String(value)]);
+    .map(([key, value]) => [
+      FIELD_LABELS[key] ?? key,
+      value === null
+        ? "Svuota il campo"
+        : typeof value === "boolean"
+          ? value
+            ? "Sì"
+            : "No"
+          : String(value),
+    ]);
 }
 
 export default function AiChatPanel() {
@@ -46,7 +75,7 @@ export default function AiChatPanel() {
     {
       id: "welcome",
       role: "assistant",
-      text: "Ciao! Posso cercare nella collezione, aggiungere o modificare manga. Puoi anche allegare una foto della copertina o del colophon.",
+      text: "Ciao, sono Koma — il tuo assistente da collezione. Posso riconoscere un manga da una foto, cercare tra i tuoi volumi e preparare aggiunte o modifiche.",
     },
   ]);
 
@@ -188,79 +217,150 @@ export default function AiChatPanel() {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-5 right-5 z-40 rounded-full bg-indigo-500 px-5 py-3 text-sm font-semibold text-white shadow-xl shadow-indigo-950/40 transition hover:bg-indigo-400"
+        className="group fixed bottom-5 right-5 z-40 flex items-center gap-3 rounded-full border border-indigo-300/20 bg-gradient-to-r from-indigo-600 to-violet-500 px-4 py-3 text-sm font-semibold text-white shadow-2xl shadow-indigo-950/50 transition hover:-translate-y-0.5 hover:shadow-indigo-900/60"
       >
-        ✨ Chat AI
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-base ring-1 ring-white/20">
+          コ
+        </span>
+        <span className="pr-1">Chiedi a Koma</span>
       </button>
     );
   }
 
   return (
-    <section className="fixed inset-x-3 bottom-3 z-40 flex max-h-[85vh] flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl shadow-black/50 sm:left-auto sm:w-[430px]">
-      <header className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-        <div>
-          <h2 className="font-semibold text-slate-100">✨ Assistente collezione</h2>
-          <p className="text-xs text-slate-500">Le modifiche richiedono sempre conferma</p>
+    <section className="fixed inset-x-2 bottom-2 top-2 z-40 flex flex-col overflow-hidden rounded-3xl border border-white/10 bg-slate-950/95 shadow-2xl shadow-black/70 backdrop-blur-xl sm:inset-x-auto sm:bottom-5 sm:right-5 sm:top-auto sm:h-[min(780px,88vh)] sm:w-[520px]">
+      <header className="relative overflow-hidden border-b border-white/10 bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-5 py-4">
+        <div className="absolute -right-10 -top-14 h-36 w-36 rounded-full bg-white/10 blur-2xl" />
+        <div className="relative flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 text-xl font-bold text-white ring-1 ring-white/25 shadow-lg">
+              コ
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-white">Koma</h2>
+                <span className="rounded-full bg-emerald-400/20 px-2 py-0.5 text-[10px] font-medium text-emerald-100 ring-1 ring-emerald-300/30">
+                  online
+                </span>
+              </div>
+              <p className="text-xs text-indigo-100/80">Il tuo assistente manga</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setOpen(false)}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-black/15 text-white/80 transition hover:bg-black/25 hover:text-white"
+            aria-label="Chiudi chat"
+          >
+            ✕
+          </button>
         </div>
-        <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-white" aria-label="Chiudi chat">
-          ✕
-        </button>
       </header>
 
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(99,102,241,0.08),_transparent_35%)] p-4 sm:p-5">
         {messages.map((message) => (
-          <div key={message.id} className={message.role === "user" ? "ml-10" : "mr-6"}>
-            <div
-              className={
-                message.role === "user"
-                  ? "rounded-2xl rounded-br-sm bg-indigo-500 px-3 py-2 text-sm text-white"
-                  : "rounded-2xl rounded-bl-sm bg-slate-800 px-3 py-2 text-sm text-slate-200"
-              }
-            >
-              {message.imageUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={message.imageUrl} alt="Allegato" className="mb-2 max-h-40 rounded-lg object-cover" />
-              )}
-              <p className="whitespace-pre-wrap">{message.text}</p>
-            </div>
+          <div
+            key={message.id}
+            className={`flex items-end gap-2.5 ${message.role === "user" ? "justify-end" : "justify-start"}`}
+          >
+            {message.role === "assistant" && (
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-xs font-bold text-white shadow-md">
+                コ
+              </div>
+            )}
+            <div className={`max-w-[84%] ${message.role === "user" ? "order-first" : ""}`}>
+              <div
+                className={
+                  message.role === "user"
+                    ? "rounded-2xl rounded-br-md bg-gradient-to-br from-indigo-500 to-violet-600 px-4 py-3 text-sm leading-relaxed text-white shadow-lg shadow-indigo-950/20"
+                    : "rounded-2xl rounded-bl-md border border-white/8 bg-slate-900 px-4 py-3 text-sm leading-relaxed text-slate-200 shadow-lg shadow-black/10"
+                }
+              >
+                {message.imageUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={message.imageUrl}
+                    alt="Allegato"
+                    className="mb-3 max-h-64 w-full rounded-xl object-cover ring-1 ring-white/10"
+                  />
+                )}
+                <p className="whitespace-pre-wrap">{message.text}</p>
+              </div>
 
-            {message.actions?.map((action, index) => {
-              const actionKey = `${message.id}:${index}`;
-              const completed = completedActions.has(actionKey);
-              return (
-                <div key={actionKey} className="mt-2 rounded-xl border border-indigo-500/40 bg-indigo-950/30 p-3">
-                  <p className="text-sm font-semibold text-indigo-200">{actionTitle(action)}</p>
-                  <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 text-xs">
-                    {actionDetails(action).map(([key, value]) => (
-                      <div key={key} className="contents">
-                        <dt className="text-slate-500">{key}</dt>
-                        <dd className="truncate text-slate-300">{value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                  {action.payload.image_url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={action.payload.image_url} alt="Copertina proposta" className="mt-2 h-20 rounded object-cover" />
-                  )}
-                  <button
-                    onClick={() => confirmAction(message.id, index, action)}
-                    disabled={completed || confirming === actionKey}
-                    className="mt-3 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-400 disabled:opacity-50"
+              {message.actions?.map((action, index) => {
+                const actionKey = `${message.id}:${index}`;
+                const completed = completedActions.has(actionKey);
+                return (
+                  <div
+                    key={actionKey}
+                    className="mt-3 overflow-hidden rounded-2xl border border-indigo-400/25 bg-gradient-to-br from-indigo-950/80 to-slate-900 shadow-xl shadow-black/15"
                   >
-                    {completed ? "Confermato" : confirming === actionKey ? "Salvataggio..." : "Conferma"}
-                  </button>
-                </div>
-              );
-            })}
+                    <div className="flex items-center gap-2 border-b border-white/8 px-4 py-3">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/20 text-sm">
+                        {action.type === "add" ? "＋" : "✎"}
+                      </span>
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-indigo-300">
+                          Proposta di Koma
+                        </p>
+                        <p className="text-sm font-semibold text-white">{actionTitle(action)}</p>
+                      </div>
+                    </div>
+                    <div className="p-4">
+                      <div className="flex gap-3">
+                        {action.payload.image_url && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={action.payload.image_url}
+                            alt="Copertina proposta"
+                            className="h-28 w-20 shrink-0 rounded-lg object-cover ring-1 ring-white/10"
+                          />
+                        )}
+                        <dl className="grid min-w-0 flex-1 grid-cols-[auto_1fr] content-start gap-x-3 gap-y-1.5 text-xs">
+                          {actionDetails(action).map(([key, value]) => (
+                            <div key={key} className="contents">
+                              <dt className="text-slate-500">{key}</dt>
+                              <dd className="truncate font-medium text-slate-200">{value}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </div>
+                      <button
+                        onClick={() => confirmAction(message.id, index, action)}
+                        disabled={completed || confirming === actionKey}
+                        className="mt-4 w-full rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-950/20 transition hover:bg-emerald-400 disabled:opacity-50"
+                      >
+                        {completed
+                          ? "✓ Operazione confermata"
+                          : confirming === actionKey
+                            ? "Salvataggio..."
+                            : "Conferma e salva"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         ))}
-        {loading && <p className="text-sm text-slate-500">Analisi in corso...</p>}
+        {loading && (
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-xs font-bold text-white">
+              コ
+            </div>
+            <div className="flex items-center gap-1 rounded-2xl rounded-bl-md border border-white/8 bg-slate-900 px-4 py-3">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-400" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-400 [animation-delay:150ms]" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-fuchsia-400 [animation-delay:300ms]" />
+              <span className="ml-2 text-xs text-slate-500">Koma sta analizzando...</span>
+            </div>
+          </div>
+        )}
         <div ref={bottomRef} />
       </div>
 
-      <form onSubmit={handleSubmit} className="border-t border-slate-800 p-3">
+      <form onSubmit={handleSubmit} className="border-t border-white/10 bg-slate-950/90 p-3.5 sm:p-4">
         {!imagePreview && contextImageUrl && (
-          <div className="mb-2 flex items-center gap-2 rounded-lg bg-slate-950 p-2">
+          <div className="mb-3 flex items-center gap-3 rounded-xl border border-white/8 bg-slate-900 p-2.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={contextImageUrl} alt="Immagine in contesto" className="h-12 w-9 rounded object-cover" />
             <span className="min-w-0 flex-1 text-xs text-slate-400">
@@ -272,7 +372,7 @@ export default function AiChatPanel() {
           </div>
         )}
         {imagePreview && (
-          <div className="mb-2 flex items-center gap-2 rounded-lg bg-slate-950 p-2">
+          <div className="mb-3 flex items-center gap-3 rounded-xl border border-white/8 bg-slate-900 p-2.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={imagePreview} alt="Anteprima allegato" className="h-14 w-10 rounded object-cover" />
             <span className="min-w-0 flex-1 truncate text-xs text-slate-400">{imageFile?.name}</span>
@@ -281,7 +381,7 @@ export default function AiChatPanel() {
             </button>
           </div>
         )}
-        <div className="flex items-end gap-2">
+        <div className="flex items-end gap-2 rounded-2xl border border-slate-700 bg-slate-900 p-2 transition focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/15">
           <input
             ref={fileInputRef}
             type="file"
@@ -292,7 +392,7 @@ export default function AiChatPanel() {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="rounded-lg border border-slate-700 px-3 py-2 text-lg text-slate-300 hover:bg-slate-800"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg text-slate-400 transition hover:bg-slate-800 hover:text-white"
             title="Allega immagine"
           >
             📎
@@ -307,18 +407,22 @@ export default function AiChatPanel() {
               }
             }}
             rows={2}
-            placeholder="Es. aggiungi questo manga alla collezione..."
-            className="input min-h-10 flex-1 resize-none"
+            placeholder="Scrivi a Koma o allega una foto..."
+            className="min-h-10 flex-1 resize-none bg-transparent px-1 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-600"
           />
           <button
             type="submit"
             disabled={loading || (!input.trim() && !imageFile)}
-            className="rounded-lg bg-indigo-500 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-50"
+            className="flex h-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-4 text-sm font-semibold text-white shadow-md transition hover:from-indigo-400 hover:to-violet-400 disabled:opacity-40"
           >
-            Invia
+            ↑
           </button>
         </div>
-        {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+        <div className="mt-2 flex items-center justify-between px-1">
+          <p className="text-[10px] text-slate-600">Invio con Enter · nuova riga con Shift+Enter</p>
+          <p className="text-[10px] text-slate-600">Koma può sbagliare: verifica prima di confermare</p>
+        </div>
+        {error && <p className="mt-2 rounded-lg bg-red-950/40 px-3 py-2 text-xs text-red-300">{error}</p>}
       </form>
     </section>
   );
