@@ -78,7 +78,6 @@ export default function AiChatPanel({ userId }: { userId: string }) {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [contextImageUrl, setContextImageUrl] = useState<string | null>(null);
-  const [previousResponseId, setPreviousResponseId] = useState<string | null>(null);
   const [recentContext, setRecentContext] = useState<ChatEntityContext | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -96,7 +95,6 @@ export default function AiChatPanel({ userId }: { userId: string }) {
         if (saved) {
           const state = JSON.parse(saved) as {
             messages?: ChatMessage[];
-            previousResponseId?: string | null;
             contextImageUrl?: string | null;
             completedActions?: string[];
             recentContext?: ChatEntityContext | null;
@@ -105,7 +103,6 @@ export default function AiChatPanel({ userId }: { userId: string }) {
           if (Array.isArray(state.messages) && state.messages.length > 0) {
             setMessages(state.messages);
           }
-          setPreviousResponseId(state.previousResponseId ?? null);
           setContextImageUrl(state.contextImageUrl ?? null);
           setCompletedActions(new Set(state.completedActions ?? []));
           setRecentContext(state.recentContext ?? null);
@@ -128,14 +125,13 @@ export default function AiChatPanel({ userId }: { userId: string }) {
       storageKey,
       JSON.stringify({
         messages,
-        previousResponseId,
         contextImageUrl,
         completedActions: [...completedActions],
         recentContext,
         open,
       })
     );
-  }, [completedActions, contextImageUrl, hydrated, messages, open, previousResponseId, recentContext, storageKey]);
+  }, [completedActions, contextImageUrl, hydrated, messages, open, recentContext, storageKey]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -157,7 +153,6 @@ export default function AiChatPanel({ userId }: { userId: string }) {
 
   function resetChat() {
     setMessages([WELCOME_MESSAGE]);
-    setPreviousResponseId(null);
     setContextImageUrl(null);
     setCompletedActions(new Set());
     setRecentContext(null);
@@ -212,14 +207,16 @@ export default function AiChatPanel({ userId }: { userId: string }) {
           message: text,
           imageUrl,
           contextImageUrl: imageUrl ?? contextImageUrl,
-          previousResponseId,
+          history: messages
+            .filter((message) => message.id !== "welcome")
+            .slice(-6)
+            .map((message) => ({ role: message.role, text: message.text.slice(0, 1000) })),
           recentContext,
         }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "Richiesta AI fallita");
 
-      setPreviousResponseId(body.responseId ?? null);
       if ("recentContext" in body) setRecentContext(body.recentContext ?? null);
       if (body.executed > 0) {
         setContextImageUrl(null);

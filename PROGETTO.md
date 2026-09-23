@@ -148,6 +148,16 @@ comandi successivi come “rimuovilo”, “modificalo” o “aggiungigli l'OBI
 si riferiscono al pezzo appena trattato senza richiedere nuovamente ID o
 serie. Dopo la rimozione il riferimento corrente viene cancellato.
 
+Per controllare i costi OpenAI, la chat non concatena più i
+`previous_response_id` tra messaggi: quella modalità faceva rileggere al
+modello tutta la catena, incluse le precedenti ricerche web, facendo crescere
+progressivamente i token. Ogni turno riceve invece solo gli ultimi 6 messaggi
+testuali (massimo 1000 caratteri ciascuno) più l'elemento corrente
+strutturato. `web_search` viene esposto solo per richieste che richiedono
+inserimento, valutazione o completamento dei metadati; conversazione,
+riepiloghi, modifiche semplici e rimozioni non pagano il contesto della
+ricerca web.
+
 Prima delle scritture, Koma deve usare la ricerca web per completare i
 metadati pubblici dell'edizione (anno, editore, lingua, ISBN) e consultare
 West Blue per la valutazione secondo le stesse regole dell'MCP. Il server

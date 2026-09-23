@@ -74,10 +74,7 @@ const patchProperties = {
   notes: { type: "string" },
 };
 
-const tools = [
-  {
-    type: "web_search",
-  },
+const functionTools = [
   {
     type: "function",
     name: "search_collection",
@@ -362,17 +359,22 @@ export async function runCollectionChat({
   message,
   imageUrl,
   actionImageUrl,
-  previousResponseId,
+  history,
   recentContext,
   items,
 }: {
   message: string;
   imageUrl: string | null;
   actionImageUrl: string | null;
-  previousResponseId: string | null;
+  history: Array<{ role: "user" | "assistant"; text: string }>;
   recentContext: ChatEntityContext | null;
   items: MangaItem[];
 }): Promise<{ responseId: string | null; text: string; actions: ChatAction[] }> {
+  const requiresWebResearch =
+    /\b(aggiung|inserisc|salva|valut|prezz|quanto vale|stima|isbn|editore|anno|lingua)\w*/i.test(message);
+  const tools = requiresWebResearch
+    ? [{ type: "web_search" }, ...functionTools]
+    : functionTools;
   const contextText = recentContext
     ? `\n\nELEMENTO CORRENTE (usa questo riferimento per pronomi e comandi successivi):\n${JSON.stringify(recentContext)}`
     : "";
@@ -383,6 +385,10 @@ export async function runCollectionChat({
     content.push({ type: "input_image", image_url: imageUrl, detail: "auto" });
   }
 
+  const compactHistory = history.slice(-6).map((entry) => ({
+    role: entry.role,
+    content: entry.text.slice(0, 1000),
+  }));
   const initialRequest = {
     model: process.env.OPENAI_CHAT_MODEL || "gpt-5-mini",
     instructions,
@@ -391,21 +397,10 @@ export async function runCollectionChat({
     max_output_tokens: 3000,
     max_tool_calls: 4,
     include: ["web_search_call.action.sources"],
-    input: [{ role: "user", content }],
+    input: [...compactHistory, { role: "user", content }],
   };
 
-  let response: OpenAIResponse;
-  try {
-    response = await createResponse({
-      ...initialRequest,
-      ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
-    });
-  } catch (cause) {
-    if (!previousResponseId) throw cause;
-    // Persisted response IDs can expire or become unavailable. Restart the
-    // model context without losing the visible local chat history.
-    response = await createResponse(initialRequest);
-  }
+  let response = await createResponse(initialRequest);
 
   const actions: ChatAction[] = [];
   let usedWebSearch = false;
@@ -427,7 +422,8 @@ export async function runCollectionChat({
       let result: ReturnType<typeof executeTool>;
       try {
         if (
-          (call.name === "prepare_add_manga" || call.name === "prepare_update_manga") &&
+          call.name === "prepare_add_manga" &&
+          requiresWebResearch &&
           !usedWebSearch
         ) {
           result = {

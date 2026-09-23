@@ -9,7 +9,15 @@ const requestSchema = z.object({
   message: z.string().trim().min(1).max(4000),
   imageUrl: z.string().url().nullable().optional(),
   contextImageUrl: z.string().url().nullable().optional(),
-  previousResponseId: z.string().nullable().optional(),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        text: z.string().max(1000),
+      })
+    )
+    .max(6)
+    .optional(),
   recentContext: chatEntityContextSchema.nullable().optional(),
 });
 
@@ -28,7 +36,7 @@ export async function POST(request: Request) {
       message: body.message,
       imageUrl: body.imageUrl ?? null,
       actionImageUrl: body.imageUrl ?? body.contextImageUrl ?? null,
-      previousResponseId: body.previousResponseId ?? null,
+      history: body.history ?? [],
       recentContext: body.recentContext ?? null,
       items,
     });
