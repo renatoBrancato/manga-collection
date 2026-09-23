@@ -28,7 +28,7 @@ export default async function DashboardPage() {
         <div
           aria-hidden="true"
           className="absolute inset-0 bg-cover bg-[center_25%] opacity-60 lg:left-auto lg:right-0 lg:w-[68%] lg:bg-contain lg:bg-right lg:bg-no-repeat lg:opacity-100 lg:[mask-image:linear-gradient(to_right,transparent_0%,black_24%,black_100%)]"
-          style={{ backgroundImage: "url('/manga-heroes.webp')" }}
+          style={{ backgroundImage: "url('/manga-heroes.gif')" }}
         />
         <div className="absolute inset-0 bg-slate-950/55 lg:hidden" />
         <div className="absolute inset-y-0 left-0 hidden w-[62%] bg-gradient-to-r from-slate-950 via-slate-950/90 to-transparent lg:block" />
