@@ -24,13 +24,14 @@ export default async function DashboardPage() {
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-slate-50 sm:px-8">
-      <header className="relative mb-7 overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-indigo-950 via-slate-900 to-fuchsia-950 shadow-2xl shadow-black/30">
+      <header className="relative mb-7 overflow-hidden rounded-3xl border border-white/10 bg-slate-950 shadow-2xl shadow-black/30">
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-cover bg-center opacity-20 mix-blend-screen lg:inset-y-0 lg:left-auto lg:right-0 lg:w-[58%] lg:bg-left lg:opacity-80"
-          style={{ backgroundImage: "url('/manga-collection-hero.svg')" }}
+          className="absolute inset-0 bg-cover bg-[center_28%] opacity-40 lg:left-auto lg:w-[62%] lg:bg-center lg:opacity-100"
+          style={{ backgroundImage: "url('/manga-heroes.png')" }}
         />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(99,102,241,0.26),transparent_34%)]" />
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/95 to-slate-950/25 lg:via-slate-950/90 lg:to-transparent" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(99,102,241,0.28),transparent_36%)]" />
 
         <div className="relative flex min-h-[255px] flex-col justify-between gap-8 p-6 sm:p-8 lg:w-[58%] lg:p-10">
           <nav className="flex flex-wrap items-center gap-2.5">
