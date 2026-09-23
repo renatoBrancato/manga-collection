@@ -1,0 +1,77 @@
+<svg width="900" height="420" viewBox="0 0 900 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sky" x1="100" y1="40" x2="790" y2="390" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#312E81"/>
+      <stop offset="0.5" stop-color="#6D28D9"/>
+      <stop offset="1" stop-color="#BE185D"/>
+    </linearGradient>
+    <radialGradient id="orb" cx="0" cy="0" r="1" gradientTransform="translate(650 185) rotate(90) scale(105)">
+      <stop stop-color="#FFF7CC"/>
+      <stop offset="0.35" stop-color="#FDE047"/>
+      <stop offset="0.7" stop-color="#F97316"/>
+      <stop offset="1" stop-color="#EA580C" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="dots" width="12" height="12" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1.7" fill="white" fill-opacity="0.18"/>
+    </pattern>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="900" height="420" rx="32" fill="url(#sky)"/>
+  <rect width="900" height="420" rx="32" fill="url(#dots)"/>
+
+  <g opacity="0.35" stroke="white" stroke-width="3">
+    <path d="M514 192L850 18"/>
+    <path d="M523 209L900 102"/>
+    <path d="M526 227L900 229"/>
+    <path d="M520 245L900 351"/>
+    <path d="M510 261L792 420"/>
+    <path d="M493 270L604 420"/>
+  </g>
+
+  <g opacity="0.22" stroke="white" stroke-width="4">
+    <path d="M0 62L342 149"/>
+    <path d="M0 166L331 191"/>
+    <path d="M0 284L343 237"/>
+    <path d="M92 420L370 264"/>
+  </g>
+
+  <g transform="translate(530 80) rotate(-8)">
+    <rect x="0" y="0" width="130" height="196" rx="8" fill="#111827" stroke="white" stroke-opacity="0.45" stroke-width="3"/>
+    <rect x="12" y="14" width="106" height="116" rx="4" fill="#F8FAFC"/>
+    <path d="M28 108L49 70L68 91L89 44L111 108H28Z" fill="#A78BFA"/>
+    <circle cx="88" cy="59" r="18" fill="#FB7185"/>
+    <path d="M18 146H112M18 159H96M18 172H106" stroke="#CBD5E1" stroke-width="6" stroke-linecap="round"/>
+  </g>
+
+  <g transform="translate(701 115) rotate(9)">
+    <rect x="0" y="0" width="118" height="178" rx="8" fill="#0F172A" stroke="white" stroke-opacity="0.38" stroke-width="3"/>
+    <rect x="11" y="12" width="96" height="105" rx="4" fill="#FEF3C7"/>
+    <path d="M20 97C39 62 58 45 98 34C85 63 73 86 55 107L20 97Z" fill="#F97316"/>
+    <path d="M17 134H101M17 147H88M17 160H98" stroke="#475569" stroke-width="6" stroke-linecap="round"/>
+  </g>
+
+  <g transform="translate(619 211) rotate(2)">
+    <rect x="0" y="0" width="132" height="198" rx="8" fill="#18181B" stroke="white" stroke-opacity="0.5" stroke-width="3"/>
+    <rect x="12" y="14" width="108" height="118" rx="4" fill="#E0F2FE"/>
+    <path d="M26 109C40 79 61 57 104 35L94 111L26 109Z" fill="#38BDF8"/>
+    <circle cx="52" cy="55" r="17" fill="#FACC15"/>
+    <path d="M18 148H114M18 162H101M18 176H109" stroke="#94A3B8" stroke-width="6" stroke-linecap="round"/>
+  </g>
+
+  <circle cx="650" cy="185" r="105" fill="url(#orb)" filter="url(#glow)" opacity="0.72"/>
+  <circle cx="650" cy="185" r="45" stroke="white" stroke-opacity="0.35" stroke-width="2"/>
+  <path d="M650 147L660 174H689L666 191L675 219L650 202L625 219L634 191L611 174H640L650 147Z" fill="white" fill-opacity="0.38"/>
+
+  <g opacity="0.42" fill="white">
+    <path d="M761 48L768 65L786 72L768 79L761 96L754 79L736 72L754 65L761 48Z"/>
+    <path d="M456 73L461 85L473 90L461 95L456 107L451 95L439 90L451 85L456 73Z"/>
+    <path d="M836 308L841 320L853 325L841 330L836 342L831 330L819 325L831 320L836 308Z"/>
+  </g>
+</svg>
