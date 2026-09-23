@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { prepareCoverBlob } from "@/lib/image-client";
-import type { ChatAction } from "@/lib/ai/schemas";
+import type { ChatAction, ChatEntityContext } from "@/lib/ai/schemas";
 
 type ChatMessage = {
   id: string;
@@ -44,7 +44,8 @@ function actionTitle(action: ChatAction): string {
     const number = action.payload.volume_number ?? action.payload.issue_number;
     return `Aggiungi ${action.payload.series}${number != null ? ` #${number}` : ""}`;
   }
-  return `Aggiorna ${action.payload.series ?? "elemento selezionato"}`;
+  if (action.type === "update") return `Aggiorna ${action.payload.series ?? "elemento selezionato"}`;
+  return `Rimuovi ${action.payload.series}`;
 }
 
 function actionDetails(action: ChatAction): Array<[string, string]> {
@@ -63,6 +64,10 @@ function actionDetails(action: ChatAction): Array<[string, string]> {
     ]);
 }
 
+function actionImageUrl(action: ChatAction): string | null {
+  return action.type === "delete" ? null : action.payload.image_url ?? null;
+}
+
 export default function AiChatPanel({ userId }: { userId: string }) {
   const router = useRouter();
   const storageKey = `manga-collection:koma-chat:${userId}`;
@@ -74,6 +79,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [contextImageUrl, setContextImageUrl] = useState<string | null>(null);
   const [previousResponseId, setPreviousResponseId] = useState<string | null>(null);
+  const [recentContext, setRecentContext] = useState<ChatEntityContext | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,6 +99,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
             previousResponseId?: string | null;
             contextImageUrl?: string | null;
             completedActions?: string[];
+            recentContext?: ChatEntityContext | null;
             open?: boolean;
           };
           if (Array.isArray(state.messages) && state.messages.length > 0) {
@@ -101,6 +108,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
           setPreviousResponseId(state.previousResponseId ?? null);
           setContextImageUrl(state.contextImageUrl ?? null);
           setCompletedActions(new Set(state.completedActions ?? []));
+          setRecentContext(state.recentContext ?? null);
           setOpen(state.open ?? false);
         }
       } catch {
@@ -123,10 +131,11 @@ export default function AiChatPanel({ userId }: { userId: string }) {
         previousResponseId,
         contextImageUrl,
         completedActions: [...completedActions],
+        recentContext,
         open,
       })
     );
-  }, [completedActions, contextImageUrl, hydrated, messages, open, previousResponseId, storageKey]);
+  }, [completedActions, contextImageUrl, hydrated, messages, open, previousResponseId, recentContext, storageKey]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -151,6 +160,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
     setPreviousResponseId(null);
     setContextImageUrl(null);
     setCompletedActions(new Set());
+    setRecentContext(null);
     setError(null);
     selectImage(null);
     localStorage.removeItem(storageKey);
@@ -203,12 +213,14 @@ export default function AiChatPanel({ userId }: { userId: string }) {
           imageUrl,
           contextImageUrl: imageUrl ?? contextImageUrl,
           previousResponseId,
+          recentContext,
         }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "Richiesta AI fallita");
 
       setPreviousResponseId(body.responseId ?? null);
+      if ("recentContext" in body) setRecentContext(body.recentContext ?? null);
       if (body.executed > 0) {
         setContextImageUrl(null);
         router.refresh();
@@ -255,7 +267,8 @@ export default function AiChatPanel({ userId }: { userId: string }) {
       if (!response.ok) throw new Error(body.error || "Operazione fallita");
 
       setCompletedActions((current) => new Set(current).add(actionKey));
-      if (action.payload.image_url && action.payload.image_url === contextImageUrl) {
+      const imageUrl = actionImageUrl(action);
+      if (imageUrl && imageUrl === contextImageUrl) {
         setContextImageUrl(null);
       }
       setMessages((current) => [
@@ -264,7 +277,11 @@ export default function AiChatPanel({ userId }: { userId: string }) {
           id: crypto.randomUUID(),
           role: "assistant",
           text:
-            (action.type === "add" ? "Elemento aggiunto alla collezione." : "Elemento aggiornato correttamente.") +
+            (action.type === "add"
+              ? "Elemento aggiunto alla collezione."
+              : action.type === "update"
+                ? "Elemento aggiornato correttamente."
+                : "Elemento rimosso dalla collezione.") +
             (body.imageWarning ? ` Attenzione: ${body.imageWarning}` : ""),
         },
       ]);
@@ -379,10 +396,10 @@ export default function AiChatPanel({ userId }: { userId: string }) {
                     </div>
                     <div className="p-4">
                       <div className="flex gap-3">
-                        {action.payload.image_url && (
+                        {actionImageUrl(action) && (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
-                            src={action.payload.image_url}
+                            src={actionImageUrl(action)!}
                             alt="Copertina proposta"
                             className="h-28 w-20 shrink-0 rounded-lg object-cover ring-1 ring-white/10"
                           />

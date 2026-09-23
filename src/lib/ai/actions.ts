@@ -1,5 +1,5 @@
 import type { ChatAction } from "@/lib/ai/schemas";
-import { insertItems, updateItem } from "@/lib/items";
+import { deleteItem, insertItems, updateItem } from "@/lib/items";
 
 export async function executeChatAction(userId: string, action: ChatAction) {
   if (action.type === "add") {
@@ -8,9 +8,14 @@ export async function executeChatAction(userId: string, action: ChatAction) {
     return { item: inserted[0], imageWarning };
   }
 
+  if (action.type === "delete") {
+    const { deleted, error } = await deleteItem(userId, action.payload.id);
+    if (error) return { error };
+    return { item: deleted };
+  }
+
   const { id, ...patch } = action.payload;
   const { updated, error, imageWarning } = await updateItem(userId, id, patch);
   if (error) return { error };
   return { item: updated, imageWarning };
 }
-

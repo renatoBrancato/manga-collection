@@ -150,6 +150,24 @@ export async function updateItem(
   return { updated: data as MangaItem, imageWarning };
 }
 
+export async function deleteItem(
+  userId: string,
+  id: string
+): Promise<{ deleted: MangaItem | null; error?: string }> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("items")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", userId)
+    .select()
+    .maybeSingle();
+
+  if (error) return { deleted: null, error: error.message };
+  if (!data) return { deleted: null, error: "Item not found" };
+  return { deleted: data as MangaItem };
+}
+
 export async function listItems(userId: string): Promise<MangaItem[]> {
   const admin = createAdminClient();
   const { data, error } = await admin

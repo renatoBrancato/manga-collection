@@ -66,6 +66,24 @@ export const chatActionSchema = z.discriminatedUnion("type", [
     type: z.literal("update"),
     payload: mangaPatchSchema,
   }),
+  z.object({
+    type: z.literal("delete"),
+    payload: z.object({
+      id: z.string().uuid(),
+      series: z.string().trim().min(1),
+      volume_number: z.number().nullable().optional(),
+      issue_number: z.string().nullable().optional(),
+    }),
+  }),
 ]);
 
 export type ChatAction = z.infer<typeof chatActionSchema>;
+
+export const chatEntityContextSchema = z.object({
+  id: z.string().uuid(),
+  series: z.string(),
+  volume_number: z.number().nullable(),
+  issue_number: z.string().nullable(),
+});
+
+export type ChatEntityContext = z.infer<typeof chatEntityContextSchema>;

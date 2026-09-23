@@ -141,6 +141,13 @@ permette di cancellarla volontariamente. Un comando esplicito come
 “aggiungi”, “aggiorna” o “salva” costituisce già autorizzazione: Koma esegue
 l'operazione nello stesso turno senza chiedere una seconda conferma.
 
+Koma conserva inoltre un **elemento corrente** strutturato (ID, serie,
+volume/numero) dopo ogni aggiunta o aggiornamento. Questo contesto viene
+persistito insieme alla chat e passato esplicitamente al modello, quindi
+comandi successivi come “rimuovilo”, “modificalo” o “aggiungigli l'OBI”
+si riferiscono al pezzo appena trattato senza richiedere nuovamente ID o
+serie. Dopo la rimozione il riferimento corrente viene cancellato.
+
 Prima delle scritture, Koma deve usare la ricerca web per completare i
 metadati pubblici dell'edizione (anno, editore, lingua, ISBN) e consultare
 West Blue per la valutazione secondo le stesse regole dell'MCP. Il server

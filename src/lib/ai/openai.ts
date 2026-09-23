@@ -1,5 +1,10 @@
 import type { MangaItem } from "@/lib/types";
-import { mangaMutationSchema, mangaPatchSchema, type ChatAction } from "@/lib/ai/schemas";
+import {
+  mangaMutationSchema,
+  mangaPatchSchema,
+  type ChatAction,
+  type ChatEntityContext,
+} from "@/lib/ai/schemas";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const MAX_TOOL_ROUNDS = 5;
@@ -128,6 +133,24 @@ const tools = [
     },
     strict: false,
   },
+  {
+    type: "function",
+    name: "delete_manga",
+    description:
+      "Rimuove l'elemento richiesto dall'utente. Usa il contesto dell'ultimo elemento quando l'utente dice 'rimuovilo', 'cancellalo' o espressioni equivalenti.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "UUID esatto dell'elemento da rimuovere" },
+        series: { type: "string" },
+        volume_number: { type: ["number", "null"] },
+        issue_number: { type: ["string", "null"] },
+      },
+      required: ["id", "series"],
+      additionalProperties: false,
+    },
+    strict: false,
+  },
 ];
 
 const instructions = `Ti chiami Koma (コ), come la vignetta/pannello del manga.
@@ -137,9 +160,19 @@ Puoi presentarti e firmare occasionalmente le conferme come Koma, ma senza
 ripetere il tuo nome in ogni frase.
 
 Quando l'utente usa un comando esplicito come "aggiungi", "inserisci",
-"aggiorna", "modifica" o "salva", quello costituisce già autorizzazione:
+"aggiorna", "modifica", "salva", "rimuovi" o "cancella", quello costituisce già autorizzazione:
 completa le ricerche necessarie e chiama il relativo tool nello stesso turno.
 Non chiedere "vuoi procedere?" e non fermarti a "operazione preparata".
+
+CONTESTO CONVERSAZIONALE
+- il messaggio può contenere un blocco "ELEMENTO CORRENTE": è l'ultimo manga
+  aggiunto, aggiornato o citato con certezza;
+- pronomi come "lo", "quello", "questo manga", "rimuovilo", "modificalo" o
+  "aggiungigli" si riferiscono a quell'elemento;
+- usa direttamente il suo id senza chiedere nuovamente serie o numero;
+- per una rimozione chiama delete_manga. Non serve ricerca web per eliminare;
+- se non esiste un elemento corrente e il riferimento è ambiguo, usa
+  search_collection o chiedi chiarimenti.
 
 Prima di aggiungere:
 - usa search_collection per verificare che non esista già lo stesso pezzo;
@@ -311,6 +344,17 @@ function executeTool(
     return { output: JSON.stringify({ prepared: true, action }), action };
   }
 
+  if (call.name === "delete_manga") {
+    const payload = {
+      id: String(args.id),
+      series: String(args.series),
+      volume_number: typeof args.volume_number === "number" ? args.volume_number : null,
+      issue_number: typeof args.issue_number === "string" ? args.issue_number : null,
+    };
+    const action: ChatAction = { type: "delete", payload };
+    return { output: JSON.stringify({ prepared: true, action }), action };
+  }
+
   return { output: JSON.stringify({ error: `Tool sconosciuto: ${call.name}` }) };
 }
 
@@ -319,15 +363,22 @@ export async function runCollectionChat({
   imageUrl,
   actionImageUrl,
   previousResponseId,
+  recentContext,
   items,
 }: {
   message: string;
   imageUrl: string | null;
   actionImageUrl: string | null;
   previousResponseId: string | null;
+  recentContext: ChatEntityContext | null;
   items: MangaItem[];
 }): Promise<{ responseId: string | null; text: string; actions: ChatAction[] }> {
-  const content: Array<Record<string, string>> = [{ type: "input_text", text: message }];
+  const contextText = recentContext
+    ? `\n\nELEMENTO CORRENTE (usa questo riferimento per pronomi e comandi successivi):\n${JSON.stringify(recentContext)}`
+    : "";
+  const content: Array<Record<string, string>> = [
+    { type: "input_text", text: `${message}${contextText}` },
+  ];
   if (imageUrl) {
     content.push({ type: "input_image", image_url: imageUrl, detail: "auto" });
   }

@@ -3,12 +3,14 @@ import { createClient } from "@/lib/supabase/server";
 import { listItems } from "@/lib/items";
 import { runCollectionChat } from "@/lib/ai/openai";
 import { executeChatAction } from "@/lib/ai/actions";
+import { chatEntityContextSchema } from "@/lib/ai/schemas";
 
 const requestSchema = z.object({
   message: z.string().trim().min(1).max(4000),
   imageUrl: z.string().url().nullable().optional(),
   contextImageUrl: z.string().url().nullable().optional(),
   previousResponseId: z.string().nullable().optional(),
+  recentContext: chatEntityContextSchema.nullable().optional(),
 });
 
 export async function POST(request: Request) {
@@ -27,6 +29,7 @@ export async function POST(request: Request) {
       imageUrl: body.imageUrl ?? null,
       actionImageUrl: body.imageUrl ?? body.contextImageUrl ?? null,
       previousResponseId: body.previousResponseId ?? null,
+      recentContext: body.recentContext ?? null,
       items,
     });
 
@@ -48,7 +51,8 @@ export async function POST(request: Request) {
         const item = execution.item;
         const name = item?.series ?? item?.title ?? action.payload.series ?? "elemento";
         const number = item?.volume_number ?? item?.issue_number;
-        return `${action.type === "add" ? "Aggiunto" : "Aggiornato"} ${name}${number != null ? ` #${number}` : ""}${
+        const verb = action.type === "add" ? "Aggiunto" : action.type === "update" ? "Aggiornato" : "Rimosso";
+        return `${verb} ${name}${number != null ? ` #${number}` : ""}${
           item?.estimated_value != null ? ` — valore ${item.estimated_value} ${item.currency}` : ""
         }${execution.imageWarning ? ` (immagine: ${execution.imageWarning})` : ""}`;
       })
@@ -62,6 +66,19 @@ export async function POST(request: Request) {
       text: [successText, errorText && `Non completato:\n${errorText}`].filter(Boolean).join("\n\n"),
       actions: [],
       executed: succeeded.length,
+      recentContext:
+        succeeded.length > 0
+          ? (() => {
+              const item = succeeded.at(-1)?.result.item;
+              if (!item || succeeded.at(-1)?.action.type === "delete") return null;
+              return {
+                id: item.id,
+                series: item.series ?? item.title,
+                volume_number: item.volume_number,
+                issue_number: item.issue_number,
+              };
+            })()
+          : body.recentContext ?? null,
     });
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : "Errore durante la richiesta AI";
