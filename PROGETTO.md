@@ -134,6 +134,13 @@ riduce e le invia in multipart a `/api/chat/image`; il server le salva nel
 bucket `covers` e passa a OpenAI il relativo URL pubblico. Lo stesso URL
 viene inserito automaticamente nella proposta di aggiunta o aggiornamento.
 
+La conversazione di Koma, le proposte non ancora confermate e l'immagine in
+contesto vengono conservate nel `localStorage` con una chiave separata per
+utente, quindi un refresh non azzera la chat. Il pulsante **Nuova chat**
+permette di cancellarla volontariamente. Quando il modello prepara
+un'aggiunta o modifica, il server restituisce subito una card deterministica:
+non effettua un secondo giro AI prima di mostrare **Conferma e salva**.
+
 Decisioni prese sul modello dati:
 - Rimosso il vecchio campo `status` (posseduto/in lettura/completato/da
   acquistare) — non richiesto/utile per un catalogo di proprietà.

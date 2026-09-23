@@ -294,20 +294,32 @@ export async function runCollectionChat({
   actionImageUrl: string | null;
   previousResponseId: string | null;
   items: MangaItem[];
-}): Promise<{ responseId: string; text: string; actions: ChatAction[] }> {
+}): Promise<{ responseId: string | null; text: string; actions: ChatAction[] }> {
   const content: Array<Record<string, string>> = [{ type: "input_text", text: message }];
   if (imageUrl) {
     content.push({ type: "input_image", image_url: imageUrl, detail: "auto" });
   }
 
-  let response = await createResponse({
+  const initialRequest = {
     model: process.env.OPENAI_CHAT_MODEL || "gpt-5-mini",
     instructions,
     tools,
     max_output_tokens: 1200,
     input: [{ role: "user", content }],
-    ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
-  });
+  };
+
+  let response: OpenAIResponse;
+  try {
+    response = await createResponse({
+      ...initialRequest,
+      ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
+    });
+  } catch (cause) {
+    if (!previousResponseId) throw cause;
+    // Persisted response IDs can expire or become unavailable. Restart the
+    // model context without losing the visible local chat history.
+    response = await createResponse(initialRequest);
+  }
 
   const actions: ChatAction[] = [];
 
@@ -340,6 +352,21 @@ export async function runCollectionChat({
         output: result.output,
       };
     });
+
+    if (actions.length > 0) {
+      const names = actions.map((action) =>
+        action.type === "add"
+          ? `${action.payload.series}${action.payload.volume_number != null ? ` vol. ${action.payload.volume_number}` : ""}`
+          : action.payload.series ?? "l'elemento selezionato"
+      );
+      return {
+        // The response contains unresolved function calls because no second
+        // model round is needed for mutations. Start fresh on the next turn.
+        responseId: null,
+        text: `Ho preparato ${actions.length === 1 ? "l'operazione" : `${actions.length} operazioni`} per ${names.join(", ")}. Controlla i dati qui sotto e premi “Conferma e salva” per applicarla.`,
+        actions,
+      };
+    }
 
     response = await createResponse({
       model: process.env.OPENAI_CHAT_MODEL || "gpt-5-mini",

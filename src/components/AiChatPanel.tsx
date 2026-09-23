@@ -13,6 +13,12 @@ type ChatMessage = {
   actions?: ChatAction[];
 };
 
+const WELCOME_MESSAGE: ChatMessage = {
+  id: "welcome",
+  role: "assistant",
+  text: "Ciao, sono Koma — il tuo assistente da collezione. Posso riconoscere un manga da una foto, cercare tra i tuoi volumi e preparare aggiunte o modifiche.",
+};
+
 const FIELD_LABELS: Record<string, string> = {
   series: "Serie",
   format: "Formato",
@@ -57,8 +63,9 @@ function actionDetails(action: ChatAction): Array<[string, string]> {
     ]);
 }
 
-export default function AiChatPanel() {
+export default function AiChatPanel({ userId }: { userId: string }) {
   const router = useRouter();
+  const storageKey = `manga-collection:koma-chat:${userId}`;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -67,17 +74,59 @@ export default function AiChatPanel() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [contextImageUrl, setContextImageUrl] = useState<string | null>(null);
   const [previousResponseId, setPreviousResponseId] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [completedActions, setCompletedActions] = useState<Set<string>>(new Set());
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      text: "Ciao, sono Koma — il tuo assistente da collezione. Posso riconoscere un manga da una foto, cercare tra i tuoi volumi e preparare aggiunte o modifiche.",
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([WELCOME_MESSAGE]);
+
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      try {
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+          const state = JSON.parse(saved) as {
+            messages?: ChatMessage[];
+            previousResponseId?: string | null;
+            contextImageUrl?: string | null;
+            completedActions?: string[];
+            open?: boolean;
+          };
+          if (Array.isArray(state.messages) && state.messages.length > 0) {
+            setMessages(state.messages);
+          }
+          setPreviousResponseId(state.previousResponseId ?? null);
+          setContextImageUrl(state.contextImageUrl ?? null);
+          setCompletedActions(new Set(state.completedActions ?? []));
+          setOpen(state.open ?? false);
+        }
+      } catch {
+        localStorage.removeItem(storageKey);
+      } finally {
+        setHydrated(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        messages,
+        previousResponseId,
+        contextImageUrl,
+        completedActions: [...completedActions],
+        open,
+      })
+    );
+  }, [completedActions, contextImageUrl, hydrated, messages, open, previousResponseId, storageKey]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -95,6 +144,16 @@ export default function AiChatPanel() {
     setImageFile(file);
     setImagePreview(file ? URL.createObjectURL(file) : null);
     setError(null);
+  }
+
+  function resetChat() {
+    setMessages([WELCOME_MESSAGE]);
+    setPreviousResponseId(null);
+    setContextImageUrl(null);
+    setCompletedActions(new Set());
+    setError(null);
+    selectImage(null);
+    localStorage.removeItem(storageKey);
   }
 
   async function uploadImage(file: File): Promise<string> {
@@ -149,7 +208,7 @@ export default function AiChatPanel() {
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "Richiesta AI fallita");
 
-      setPreviousResponseId(body.responseId);
+      setPreviousResponseId(body.responseId ?? null);
       setMessages((current) => [
         ...current,
         {
@@ -246,13 +305,22 @@ export default function AiChatPanel() {
               <p className="text-xs text-indigo-100/80">Il tuo assistente manga</p>
             </div>
           </div>
-          <button
-            onClick={() => setOpen(false)}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-black/15 text-white/80 transition hover:bg-black/25 hover:text-white"
-            aria-label="Chiudi chat"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={resetChat}
+              className="rounded-full bg-black/15 px-3 py-2 text-[11px] font-medium text-white/75 transition hover:bg-black/25 hover:text-white"
+              title="Cancella la conversazione corrente"
+            >
+              Nuova chat
+            </button>
+            <button
+              onClick={() => setOpen(false)}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/15 text-white/80 transition hover:bg-black/25 hover:text-white"
+              aria-label="Chiudi chat"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       </header>
 

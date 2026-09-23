@@ -49,7 +49,7 @@ export default async function DashboardPage() {
       </div>
 
       <ItemsTable items={(items ?? []) as MangaItem[]} />
-      <AiChatPanel />
+      <AiChatPanel userId={user.id} />
     </main>
   );
 }
