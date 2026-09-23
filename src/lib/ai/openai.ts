@@ -71,6 +71,9 @@ const patchProperties = {
 
 const tools = [
   {
+    type: "web_search",
+  },
+  {
     type: "function",
     name: "search_collection",
     description: "Cerca elementi già presenti nella collezione prima di rispondere o preparare un aggiornamento.",
@@ -95,7 +98,7 @@ const tools = [
     type: "function",
     name: "prepare_add_manga",
     description:
-      "Prepara l'aggiunta di un manga senza salvarlo. Usalo solo quando i dati identificativi minimi sono sufficienti; la UI chiederà conferma.",
+      "Completa e invia i dati di un manga che l'utente ha chiesto esplicitamente di aggiungere. Prima usa search_collection per evitare duplicati e web_search per metadati e valutazione.",
     parameters: {
       type: "object",
       properties: itemProperties,
@@ -108,7 +111,7 @@ const tools = [
     type: "function",
     name: "prepare_update_manga",
     description:
-      "Prepara la modifica di un elemento esistente senza salvarla. Prima usa search_collection per ottenere l'id corretto.",
+      "Completa e invia la modifica che l'utente ha chiesto esplicitamente. Prima usa search_collection per ottenere l'id corretto e web_search se servono metadati o prezzo.",
     parameters: {
       type: "object",
       properties: {
@@ -133,9 +136,35 @@ Rispondi in italiano, in modo breve e concreto.
 Puoi presentarti e firmare occasionalmente le conferme come Koma, ma senza
 ripetere il tuo nome in ogni frase.
 
-Puoi cercare nella collezione e preparare aggiunte o modifiche tramite tool.
-Non puoi modificare direttamente i dati: prepare_add_manga e
-prepare_update_manga producono una proposta che l'utente deve confermare.
+Quando l'utente usa un comando esplicito come "aggiungi", "inserisci",
+"aggiorna", "modifica" o "salva", quello costituisce già autorizzazione:
+completa le ricerche necessarie e chiama il relativo tool nello stesso turno.
+Non chiedere "vuoi procedere?" e non fermarti a "operazione preparata".
+
+Prima di aggiungere:
+- usa search_collection per verificare che non esista già lo stesso pezzo;
+- usa web_search per completare i metadati pubblici dell'edizione esatta:
+  anno di uscita, editore, lingua, ISBN e altri dati reperibili;
+- non lasciare questi campi vuoti solo perché non sono scritti nel messaggio:
+  cercali online, usando foto, serie, numero ed edizione per disambiguare.
+
+VALUTAZIONE OBBLIGATORIA
+- prima di chiamare prepare_add_manga o prepare_update_manga, cerca il valore
+  su https://westblue.shop/pages/manga-price-tracker;
+- cerca serie e volume/numero esatti;
+- non mescolare RAW e graded, con OBI e senza OBI, prima stampa e ristampa;
+- per un graded abbina ente e voto quando disponibili;
+- usa la MEDIA delle vendite recenti mostrata dal tracker, non il prezzo più
+  alto e non una media tra categorie differenti;
+- se la media è in USD, converti in EUR al cambio corrente;
+- inserisci il risultato in estimated_value e EUR in currency;
+- riporta in notes una nota sintetica sulla fonte/media West Blue;
+- se West Blue non ha alcun dato compatibile, lascia estimated_value vuoto ma
+  scrivi chiaramente in notes che non esistono comparabili compatibili.
+- usa al massimo 3 ricerche web mirate per richiesta: una per identificare
+  l'edizione/metadati, una per West Blue e una eventuale verifica finale.
+- dopo le ricerche chiama sempre il tool di aggiunta/aggiornamento: non
+  terminare con una semplice spiegazione testuale.
 
 Quando ricevi una foto:
 - analizza copertina, dorso, colophon ed eventuale slab;
@@ -151,8 +180,9 @@ Quando ricevi una foto:
   copertina o l'utente chiede esplicitamente di sostituire l'immagine. Usa
   false per colophon, dettagli interni o slab che servono solo all'analisi.
 
-Se mancano dati essenziali o ci sono più elementi possibili, chiedi una
-precisazione invece di preparare una modifica ambigua.`;
+Chiedi una precisazione solo se non puoi identificare l'edizione dopo aver
+analizzato la foto e cercato sul web, oppure se trovi più edizioni plausibili.
+Non chiedere conferma dopo un comando esplicito dell'utente.`;
 
 function outputText(response: OpenAIResponse): string {
   return response.output
@@ -263,6 +293,7 @@ function executeTool(
   if (call.name === "prepare_add_manga") {
     const payload = mangaMutationSchema.parse({
       ...args,
+      currency: "EUR",
       image_url: imageUrl ?? args.image_url ?? null,
     });
     const action: ChatAction = { type: "add", payload };
@@ -273,6 +304,7 @@ function executeTool(
     const { use_attached_image: useAttachedImage, ...patchArgs } = args;
     const payload = mangaPatchSchema.parse({
       ...patchArgs,
+      ...(patchArgs.estimated_value !== undefined ? { currency: "EUR" } : {}),
       ...(imageUrl && useAttachedImage === true ? { image_url: imageUrl } : {}),
     });
     const action: ChatAction = { type: "update", payload };
@@ -304,7 +336,10 @@ export async function runCollectionChat({
     model: process.env.OPENAI_CHAT_MODEL || "gpt-5-mini",
     instructions,
     tools,
-    max_output_tokens: 1200,
+    reasoning: { effort: "low" },
+    max_output_tokens: 3000,
+    max_tool_calls: 4,
+    include: ["web_search_call.action.sources"],
     input: [{ role: "user", content }],
   };
 
@@ -322,8 +357,12 @@ export async function runCollectionChat({
   }
 
   const actions: ChatAction[] = [];
+  let usedWebSearch = false;
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
+    if (response.output.some((item) => item.type === "web_search_call")) {
+      usedWebSearch = true;
+    }
     const calls = response.output.filter((item): item is FunctionCall => item.type === "function_call");
     if (calls.length === 0) {
       return {
@@ -336,8 +375,21 @@ export async function runCollectionChat({
     const outputs = calls.map((call) => {
       let result: ReturnType<typeof executeTool>;
       try {
-        result = executeTool(call, items, actionImageUrl);
-        if (result.action) actions.push(result.action);
+        if (
+          (call.name === "prepare_add_manga" || call.name === "prepare_update_manga") &&
+          !usedWebSearch
+        ) {
+          result = {
+            output: JSON.stringify({
+              error: "Ricerca web obbligatoria non ancora eseguita",
+              instruction:
+                "Usa ora web_search per completare metadati e valutazione West Blue, poi richiama lo stesso tool con i dati arricchiti.",
+            }),
+          };
+        } else {
+          result = executeTool(call, items, actionImageUrl);
+          if (result.action) actions.push(result.action);
+        }
       } catch (cause) {
         result = {
           output: JSON.stringify({
@@ -363,7 +415,7 @@ export async function runCollectionChat({
         // The response contains unresolved function calls because no second
         // model round is needed for mutations. Start fresh on the next turn.
         responseId: null,
-        text: `Ho preparato ${actions.length === 1 ? "l'operazione" : `${actions.length} operazioni`} per ${names.join(", ")}. Controlla i dati qui sotto e premi “Conferma e salva” per applicarla.`,
+        text: `Operazione pronta per ${names.join(", ")}.`,
         actions,
       };
     }
@@ -372,7 +424,10 @@ export async function runCollectionChat({
       model: process.env.OPENAI_CHAT_MODEL || "gpt-5-mini",
       instructions,
       tools,
-      max_output_tokens: 1200,
+      reasoning: { effort: "low" },
+      max_output_tokens: 3000,
+      max_tool_calls: 4,
+      include: ["web_search_call.action.sources"],
       previous_response_id: response.id,
       input: outputs,
     });

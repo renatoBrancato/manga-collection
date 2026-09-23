@@ -209,6 +209,10 @@ export default function AiChatPanel({ userId }: { userId: string }) {
       if (!response.ok) throw new Error(body.error || "Richiesta AI fallita");
 
       setPreviousResponseId(body.responseId ?? null);
+      if (body.executed > 0) {
+        setContextImageUrl(null);
+        router.refresh();
+      }
       setMessages((current) => [
         ...current,
         {
@@ -488,7 +492,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
         </div>
         <div className="mt-2 flex items-center justify-between px-1">
           <p className="text-[10px] text-slate-600">Invio con Enter · nuova riga con Shift+Enter</p>
-          <p className="text-[10px] text-slate-600">Koma può sbagliare: verifica prima di confermare</p>
+          <p className="text-[10px] text-slate-600">Koma può sbagliare: controlla sempre i dati salvati</p>
         </div>
         {error && <p className="mt-2 rounded-lg bg-red-950/40 px-3 py-2 text-xs text-red-300">{error}</p>}
       </form>

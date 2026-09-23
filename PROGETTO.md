@@ -134,12 +134,20 @@ riduce e le invia in multipart a `/api/chat/image`; il server le salva nel
 bucket `covers` e passa a OpenAI il relativo URL pubblico. Lo stesso URL
 viene inserito automaticamente nella proposta di aggiunta o aggiornamento.
 
-La conversazione di Koma, le proposte non ancora confermate e l'immagine in
+La conversazione di Koma, le operazioni e l'immagine in
 contesto vengono conservate nel `localStorage` con una chiave separata per
 utente, quindi un refresh non azzera la chat. Il pulsante **Nuova chat**
-permette di cancellarla volontariamente. Quando il modello prepara
-un'aggiunta o modifica, il server restituisce subito una card deterministica:
-non effettua un secondo giro AI prima di mostrare **Conferma e salva**.
+permette di cancellarla volontariamente. Un comando esplicito come
+“aggiungi”, “aggiorna” o “salva” costituisce già autorizzazione: Koma esegue
+l'operazione nello stesso turno senza chiedere una seconda conferma.
+
+Prima delle scritture, Koma deve usare la ricerca web per completare i
+metadati pubblici dell'edizione (anno, editore, lingua, ISBN) e consultare
+West Blue per la valutazione secondo le stesse regole dell'MCP. Il server
+accetta il tool di scrittura solo se nello stesso turno è stata realmente
+eseguita almeno una ricerca web. Le ricerche sono limitate per contenere
+latenza e costi; se West Blue non ha comparabili compatibili il valore resta
+vuoto e il motivo viene salvato nelle note, senza inventare un prezzo.
 
 Decisioni prese sul modello dati:
 - Rimosso il vecchio campo `status` (posseduto/in lettura/completato/da
