@@ -27,7 +27,7 @@ export default async function DashboardPage() {
       <header className="relative mb-7 overflow-hidden rounded-3xl border border-white/10 bg-slate-950 shadow-2xl shadow-black/30">
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-cover bg-[center_25%] opacity-60 lg:left-auto lg:right-0 lg:w-[60%] lg:bg-center lg:opacity-100"
+          className="absolute inset-0 bg-cover bg-[center_25%] opacity-60 lg:left-auto lg:right-0 lg:w-[60%] lg:bg-contain lg:bg-right lg:bg-no-repeat lg:opacity-100"
           style={{ backgroundImage: "url('/manga-heroes.png')" }}
         />
         <div className="absolute inset-0 bg-slate-950/55 lg:hidden" />
