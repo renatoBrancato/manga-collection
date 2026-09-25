@@ -227,8 +227,12 @@ function outputText(response: OpenAIResponse): string {
 }
 
 async function createResponse(body: Record<string, unknown>): Promise<OpenAIResponse> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("OPENAI_API_KEY non configurata");
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error(
+      "OPENAI_API_KEY non configurata in questo deployment. Su Vercel aggiungi la variabile per l'ambiente in uso (Production e Preview) e poi esegui un nuovo deploy: le variabili non vengono applicate ai deployment già esistenti."
+    );
+  }
 
   const response = await fetch(OPENAI_RESPONSES_URL, {
     method: "POST",
