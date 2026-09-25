@@ -60,8 +60,24 @@ export async function POST(request: Request) {
         const name = item?.series ?? item?.title ?? action.payload.series ?? "elemento";
         const number = item?.volume_number ?? item?.issue_number;
         const verb = action.type === "add" ? "Aggiunto" : action.type === "update" ? "Aggiornato" : "Rimosso";
+        const label = `${name}${number != null ? ` #${number}` : ""}`;
+
+        if (result.intent.valuation && action.type === "update") {
+          if (action.payload.estimated_value != null) {
+            return `Valore aggiornato per ${label} — ${action.payload.estimated_value} ${
+              action.payload.currency ?? "EUR"
+            }`;
+          }
+
+          return `Valore non aggiornato per ${label}: ${
+            action.payload.notes ?? "West Blue non ha restituito comparabili compatibili."
+          }`;
+        }
+
         return `${verb} ${name}${number != null ? ` #${number}` : ""}${
-          item?.estimated_value != null ? ` — valore ${item.estimated_value} ${item.currency}` : ""
+          action.type === "add" && item?.estimated_value != null
+            ? ` — valore ${item.estimated_value} ${item.currency}`
+            : ""
         }${execution.imageWarning ? ` (immagine: ${execution.imageWarning})` : ""}`;
       })
       .join("\n");

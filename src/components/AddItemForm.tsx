@@ -62,9 +62,36 @@ export default function AddItemForm({ userId }: { userId: string }) {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-400"
+        className="group flex w-full items-center justify-between gap-4 rounded-2xl border border-indigo-400/20 bg-gradient-to-r from-indigo-500/15 via-violet-500/10 to-transparent px-5 py-4 text-left transition hover:border-indigo-400/40 hover:from-indigo-500/25 sm:w-auto sm:min-w-[320px]"
       >
-        + Aggiungi manualmente
+        <span className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500 text-white shadow-lg shadow-indigo-950/40 transition group-hover:scale-105">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              className="h-5 w-5"
+              aria-hidden="true"
+            >
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </span>
+          <span>
+            <span className="block font-semibold text-white">Nuovo pezzo</span>
+            <span className="mt-0.5 block text-xs text-slate-400">Inserisci volume o rivista nella collezione</span>
+          </span>
+        </span>
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          className="h-5 w-5 text-indigo-300 transition group-hover:translate-x-1"
+          aria-hidden="true"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </svg>
       </button>
     );
   }

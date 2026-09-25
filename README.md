@@ -102,7 +102,7 @@ Per testare in locale da VS Code (Agent Mode), vedi
 - `src/app/api/chat` - chat AI con vision e function calling
 - `src/app/api/chat/image` - upload multipart delle immagini della chat
 - `src/app/api/chat/action` - conferma ed esecuzione delle azioni preparate dall'AI
-- `src/app/api/mcp` - server MCP (aggiunta, aggiornamento, elenco e rivalutazione via West Blue)
+- `src/app/api/mcp` - server MCP (aggiunta, aggiornamento, elenco e rivalutazione via West Blue; RAW = media, graded = riga esatta per volume/ente/voto)
 - `src/app/api/collection` - endpoint REST alternativo, utile per test manuali
 - `src/app/api/auth/callback` - callback OAuth Supabase
 - `supabase/migrations/` - storico migrazioni SQL (gestito da Supabase CLI)

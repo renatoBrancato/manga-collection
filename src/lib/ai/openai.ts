@@ -183,9 +183,11 @@ VALUTAZIONE OBBLIGATORIA
   su https://westblue.shop/pages/manga-price-tracker;
 - cerca serie e volume/numero esatti;
 - non mescolare RAW e graded, con OBI e senza OBI, prima stampa e ristampa;
-- per un graded abbina ente e voto quando disponibili;
-- usa la MEDIA delle vendite recenti mostrata dal tracker, non il prezzo più
-  alto e non una media tra categorie differenti;
+- per un graded usa la riga esatta che coincide con volume, ente e voto
+  quando presenti: non fare medie tra graded diversi e non usare il prezzo
+  di un'altra fascia di grading;
+- per RAW usa la media delle vendite recenti mostrata dal tracker;
+- non usare il prezzo più alto e non fare medie tra categorie differenti;
 - se la media è in USD, converti in EUR al cambio corrente;
 - inserisci il risultato in estimated_value e EUR in currency;
 - riporta in notes una nota sintetica sulla fonte/media West Blue;
@@ -369,7 +371,14 @@ export async function runCollectionChat({
   history: Array<{ role: "user" | "assistant"; text: string }>;
   recentContext: ChatEntityContext | null;
   items: MangaItem[];
-}): Promise<{ responseId: string | null; text: string; actions: ChatAction[] }> {
+}): Promise<{
+  responseId: string | null;
+  text: string;
+  actions: ChatAction[];
+  intent: { valuation: boolean };
+}> {
+  const requiresValuation =
+    /\b(valut|prezz|quanto vale|stima(?:re|zione)?|rivalut)\w*/i.test(message);
   const requiresWebResearch =
     /\b(aggiung|inserisc|salva|valut|prezz|quanto vale|stima|isbn|editore|anno|lingua)\w*/i.test(message);
   const tools = requiresWebResearch
@@ -415,22 +424,48 @@ export async function runCollectionChat({
         responseId: response.id,
         text: outputText(response) || "Operazione preparata.",
         actions,
+        intent: { valuation: requiresValuation },
       };
     }
 
     const outputs = calls.map((call) => {
       let result: ReturnType<typeof executeTool>;
       try {
-        if (
-          call.name === "prepare_add_manga" &&
-          requiresWebResearch &&
-          !usedWebSearch
-        ) {
+        const args = JSON.parse(call.arguments || "{}") as Record<string, unknown>;
+        const valuationNotes = typeof args.notes === "string" ? args.notes.toLowerCase() : "";
+        const documentsMissingComparable =
+          valuationNotes.includes("west blue") &&
+          (valuationNotes.includes("nessun") ||
+            valuationNotes.includes("non disponibile") ||
+            valuationNotes.includes("senza comparabil"));
+
+        if (call.name === "prepare_add_manga" && requiresWebResearch && !usedWebSearch) {
           result = {
             output: JSON.stringify({
               error: "Ricerca web obbligatoria non ancora eseguita",
               instruction:
                 "Usa ora web_search per completare metadati e valutazione West Blue, poi richiama lo stesso tool con i dati arricchiti.",
+            }),
+          };
+        } else if (call.name === "prepare_update_manga" && requiresValuation && !usedWebSearch) {
+          result = {
+            output: JSON.stringify({
+              error: "Ricerca web del valore non ancora eseguita",
+              instruction:
+                "Usa ora web_search su West Blue per il pezzo esatto. Poi richiama prepare_update_manga con estimated_value in EUR oppure con notes che dichiarino esplicitamente l'assenza di comparabili compatibili.",
+            }),
+          };
+        } else if (
+          call.name === "prepare_update_manga" &&
+          requiresValuation &&
+          args.estimated_value === undefined &&
+          !documentsMissingComparable
+        ) {
+          result = {
+            output: JSON.stringify({
+              error: "Aggiornamento del valore incompleto",
+              instruction:
+                "Non dichiarare il prezzo aggiornato senza estimated_value. Se West Blue non offre comparabili compatibili, richiama il tool con una nota esplicita e non inventare un valore.",
             }),
           };
         } else {
@@ -464,6 +499,7 @@ export async function runCollectionChat({
         responseId: null,
         text: `Operazione pronta per ${names.join(", ")}.`,
         actions,
+        intent: { valuation: requiresValuation },
       };
     }
 
@@ -484,5 +520,6 @@ export async function runCollectionChat({
     responseId: response.id,
     text: outputText(response) || "Ho preparato quanto possibile; controlla le proposte prima di confermare.",
     actions,
+    intent: { valuation: requiresValuation },
   };
 }

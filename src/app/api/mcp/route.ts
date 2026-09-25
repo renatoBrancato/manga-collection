@@ -37,9 +37,10 @@ Prima di aggiungere, aggiornare o rivalutare un elemento:
    - con OBI e senza OBI non devono mai essere mescolati;
    - per un graded usa, quando disponibile, lo stesso ente e lo stesso voto;
    - non usare dati di una prima stampa per una ristampa o viceversa.
-3. Usa la MEDIA mostrata dal tracker per quella combinazione esatta di filtri,
-   basata sulle vendite recenti. Non scegliere il prezzo più alto e non fare
-   una media manuale tra categorie differenti.
+3. Per i RAW usa la MEDIA mostrata dal tracker per quella combinazione esatta
+   di filtri, basata sulle vendite recenti. Per i graded usa invece il prezzo
+   della riga esatta che corrisponde a volume, ente e voto; non fare medie
+   tra graded diversi e non usare il prezzo di una fascia di grading diversa.
 4. Se un attributo decisivo non è noto (per esempio OBI o prima stampa), non
    inventarlo: chiedi chiarimenti oppure non valorizzare il prezzo.
 5. Se West Blue non contiene vendite compatibili, dichiaralo chiaramente e
@@ -150,7 +151,7 @@ function buildServer(userId: string) {
           .number()
           .optional()
           .describe(
-            `Valore di mercato in EUR. Prima consulta ${PRICE_TRACKER_URL}, usa esclusivamente la media mostrata per filtri compatibili (edizione, raw/graded, ente/voto, con/senza OBI, prima stampa/ristampa). Se non ci sono dati compatibili, ometti il campo; non usare automaticamente altre fonti.`
+            `Valore di mercato in EUR. Prima consulta ${PRICE_TRACKER_URL}. Per i RAW usa la media mostrata per filtri compatibili (edizione, con/senza OBI, prima stampa/ristampa). Per i graded usa il prezzo della riga esatta con stesso volume, ente e voto. Se non ci sono dati compatibili, ometti il campo; non usare automaticamente altre fonti.`
           ),
         currency: z.string().default("EUR"),
         image_url: z
@@ -218,7 +219,7 @@ function buildServer(userId: string) {
           .number()
           .optional()
           .describe(
-            `Valore di mercato in EUR. Ricontrolla su ${PRICE_TRACKER_URL} e usa soltanto la media per filtri compatibili (raw/graded, ente/voto, con/senza OBI, prima stampa/ristampa). Se non ci sono dati compatibili, lascia il valore invariato.`
+            `Valore di mercato in EUR. Ricontrolla su ${PRICE_TRACKER_URL}. Per i RAW usa solo la media per filtri compatibili; per i graded usa il prezzo della riga esatta con stesso volume, ente e voto. Se non ci sono dati compatibili, lascia il valore invariato.`
           ),
         currency: z.string().optional(),
         image_url: z
@@ -285,7 +286,8 @@ function buildServer(userId: string) {
                 valuation_rules: [
                   "Non mescolare RAW e graded.",
                   "Non mescolare con OBI e senza OBI.",
-                  "Per i graded abbina ente e voto quando disponibili.",
+                  "Per i graded usa il prezzo della riga esatta con volume, ente e voto; non fare medie tra graded diversi.",
+                  "Per i RAW usa la media mostrata dal tracker.",
                   "Non mescolare prima stampa e ristampa.",
                   "Se OBI/stampa sono sconosciuti, chiedi chiarimenti o non aggiornare.",
                   "Se non esistono vendite compatibili, lascia il valore invariato e segnalalo.",
@@ -321,7 +323,7 @@ function buildServer(userId: string) {
             type: "text",
             text:
               `Rivaluta la mia collezione (${scope ?? "all"}). ` +
-              "Chiama revalue_manga_collection, poi visita West Blue per ogni candidato, applica esattamente i filtri richiesti e usa la media mostrata. " +
+              "Chiama revalue_manga_collection, poi visita West Blue per ogni candidato, applica esattamente i filtri richiesti. Per i RAW usa la media mostrata, per i graded usa il prezzo della riga esatta con stesso volume, ente e voto. " +
               "Aggiorna con update_manga_item soltanto gli elementi con dati compatibili e alla fine riepiloga valori precedenti, nuovi valori, elementi non aggiornati e motivazione.",
           },
         },

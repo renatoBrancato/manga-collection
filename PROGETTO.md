@@ -108,9 +108,11 @@ completo e `supabase/migrations/` per lo schema SQL):
 **Fonte prezzi primaria**: per `estimated_value`, il server MCP istruisce
 ChatGPT (via `instructions` del server + descrizione dei campi) a consultare
 https://westblue.shop/pages/manga-price-tracker e usare la media mostrata
-solo per vendite compatibili con edizione, raw/graded, ente/voto, OBI e
-stampa. Se non ci sono dati compatibili, il valore resta invariato/omesso:
-non vengono usati fallback silenziosi o filtri più larghi.
+solo per vendite compatibili con edizione, RAW, OBI e stampa. Per i graded
+si usa invece il prezzo della riga esatta che corrisponde a volume, ente e
+voto; non si fanno medie tra graded diversi. Se non ci sono dati compatibili,
+il valore resta invariato/omesso: non vengono usati fallback silenziosi o
+filtri più larghi.
 
 Il tool `revalue_manga_collection` prepara i criteri di ricerca per tutti gli
 elementi (o solo quelli senza prezzo); ChatGPT deve poi visitare West Blue e

@@ -27,16 +27,16 @@ export default async function DashboardPage() {
       <header className="relative mb-7 overflow-hidden rounded-3xl border border-white/10 bg-slate-950 shadow-2xl shadow-black/30">
         <div
           aria-hidden="true"
-          className="absolute -inset-3 bg-cover bg-[center_25%] opacity-60 lg:scale-105 lg:bg-center lg:opacity-30 lg:blur-md lg:brightness-50"
+          className="absolute inset-0 bg-cover bg-[center_25%] opacity-60 lg:hidden"
           style={{ backgroundImage: "url('/manga-heroes.gif')" }}
         />
         <div
           aria-hidden="true"
-          className="absolute inset-y-0 right-0 hidden w-[68%] bg-contain bg-right bg-no-repeat lg:block"
-          style={{ backgroundImage: "url('/manga-heroes.gif')" }}
+          className="absolute inset-y-0 right-0 hidden w-[72%] bg-contain bg-right bg-no-repeat lg:block"
+          style={{ backgroundImage: "url('/manga-heroes-desktop.png')" }}
         />
         <div className="absolute inset-0 bg-slate-950/55 lg:hidden" />
-        <div className="absolute inset-0 hidden bg-gradient-to-r from-slate-950 via-slate-950/85 via-45% to-slate-950/5 lg:block" />
+        <div className="absolute inset-0 hidden bg-gradient-to-r from-slate-950 via-slate-950/95 via-38% to-transparent lg:block" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_22%,rgba(99,102,241,0.3),transparent_34%)] lg:w-[58%]" />
 
         <div className="relative flex min-h-[255px] flex-col justify-between gap-8 p-6 sm:p-8 lg:w-[58%] lg:p-10">
