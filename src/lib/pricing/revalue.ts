@@ -128,9 +128,18 @@ export async function revalueUserCollection(
 
   let items = options.items;
   if (!items) {
-    const { data, error } = await admin.from("items").select("*").eq("user_id", userId);
-    if (error) throw new Error(error.message);
-    items = (data ?? []) as MangaItem[];
+    items = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await admin
+        .from("items")
+        .select("*")
+        .eq("user_id", userId)
+        .order("id")
+        .range(from, from + 999);
+      if (error) throw new Error(error.message);
+      items.push(...((data ?? []) as MangaItem[]));
+      if (!data || data.length < 1000) break;
+    }
   }
 
   const selected = scope === "missing_value" ? items.filter((i) => i.estimated_value == null) : items;
@@ -284,10 +293,21 @@ export async function revalueAllCollections(
   const startedAt = Date.now();
   const admin = createAdminClient();
 
-  const { data, error } = await admin.from("items").select("*");
-  if (error) throw new Error(error.message);
-
-  const items = (data ?? []) as MangaItem[];
+  // PostgREST restituisce al massimo 1000 righe per richiesta: si pagina
+  // finché non arrivano tutte, altrimenti oltre quella soglia i pezzi
+  // verrebbero silenziosamente esclusi dalla rivalutazione.
+  const PAGE_SIZE = 1000;
+  const items: MangaItem[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await admin
+      .from("items")
+      .select("*")
+      .order("id")
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    items.push(...((data ?? []) as MangaItem[]));
+    if (!data || data.length < PAGE_SIZE) break;
+  }
   const byUser = new Map<string, MangaItem[]>();
   for (const item of items) {
     const bucket = byUser.get(item.user_id);
