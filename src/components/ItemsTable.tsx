@@ -32,6 +32,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
   const [valueFilter, setValueFilter] = useState("all");
   const [sort, setSort] = useState("newest");
   const [search, setSearch] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MangaItem | null>(null);
 
   const languages = useMemo(
@@ -82,14 +83,18 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
     search,
   ]);
 
-  const hasActiveFilters =
-    Boolean(search) ||
-    formatFilter !== "all" ||
-    gradingFilter !== "all" ||
-    obiFilter !== "all" ||
-    printingFilter !== "all" ||
-    languageFilter !== "all" ||
-    valueFilter !== "all";
+  // Conta solo i filtri collassati: la ricerca resta sempre visibile e
+  // l'ordinamento non riduce i risultati.
+  const activeFilterCount = [
+    formatFilter,
+    gradingFilter,
+    obiFilter,
+    printingFilter,
+    languageFilter,
+    valueFilter,
+  ].filter((value) => value !== "all").length;
+
+  const hasActiveFilters = Boolean(search) || activeFilterCount > 0;
 
   function resetFilters() {
     setSearch("");
@@ -110,7 +115,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-white/10 bg-slate-900/65 p-4 shadow-lg shadow-black/10 backdrop-blur">
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-300">Archivio</p>
             <h2 className="mt-1 text-lg font-bold text-white">Esplora la collezione</h2>
@@ -127,8 +132,8 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
           </div>
         </div>
 
-        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-          <label className="relative sm:col-span-2">
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+          <label className="relative min-w-0 flex-1">
             <span className="sr-only">Cerca nella collezione</span>
             <svg
               viewBox="0 0 24 24"
@@ -149,55 +154,101 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
             />
           </label>
 
-          <select value={formatFilter} onChange={(e) => setFormatFilter(e.target.value)} className="input w-full">
-            <option value="all">Ogni formato</option>
-            <option value="tankobon">Tankobon</option>
-            <option value="zashi">Zashi</option>
-          </select>
-          <select value={gradingFilter} onChange={(e) => setGradingFilter(e.target.value)} className="input w-full">
-            <option value="all">Raw e gradati</option>
-            <option value="raw">Solo raw</option>
-            <option value="graded">Solo gradati</option>
-          </select>
-          <select value={obiFilter} onChange={(e) => setObiFilter(e.target.value)} className="input w-full">
-            <option value="all">OBI: tutti</option>
-            <option value="yes">Con OBI</option>
-            <option value="no">Senza OBI</option>
-          </select>
-          <select
-            value={printingFilter}
-            onChange={(e) => setPrintingFilter(e.target.value)}
-            className="input w-full"
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((open) => !open)}
+            aria-expanded={filtersOpen}
+            className={`flex shrink-0 items-center justify-center gap-2 rounded-lg border px-3.5 py-2 text-sm font-medium transition ${
+              activeFilterCount > 0
+                ? "border-indigo-400/40 bg-indigo-500/15 text-indigo-200"
+                : "border-slate-700 bg-slate-950 text-slate-300 hover:bg-slate-800"
+            }`}
           >
-            <option value="all">Ogni tiratura</option>
-            <option value="first">Prima stampa</option>
-            <option value="reprint">Ristampa</option>
-          </select>
-          <select value={valueFilter} onChange={(e) => setValueFilter(e.target.value)} className="input w-full">
-            <option value="all">Valore: tutti</option>
-            <option value="valued">Con valutazione</option>
-            <option value="missing">Da valutare</option>
-          </select>
-
-          {languages.length > 0 && (
-            <select value={languageFilter} onChange={(e) => setLanguageFilter(e.target.value)} className="input w-full">
-              <option value="all">Ogni lingua</option>
-              {languages.map((language) => (
-                <option key={language} value={language}>
-                  {language}
-                </option>
-              ))}
-            </select>
-          )}
-          <select value={sort} onChange={(e) => setSort(e.target.value)} className="input w-full">
-            <option value="newest">Più recenti</option>
-            <option value="title">Titolo A-Z</option>
-            <option value="year_desc">Anno: più nuovi</option>
-            <option value="year_asc">Anno: più vecchi</option>
-            <option value="value_desc">Valore: decrescente</option>
-            <option value="value_asc">Valore: crescente</option>
-          </select>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              className="h-4 w-4"
+              aria-hidden="true"
+            >
+              <path d="M3 5h18M6 12h12M10 19h4" />
+            </svg>
+            Filtri
+            {activeFilterCount > 0 && (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-indigo-500 px-1.5 text-[11px] font-semibold text-white">
+                {activeFilterCount}
+              </span>
+            )}
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              className={`h-4 w-4 transition-transform ${filtersOpen ? "rotate-180" : ""}`}
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
         </div>
+
+        {filtersOpen && (
+          <div className="mt-2.5 grid gap-2.5 border-t border-white/8 pt-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <select value={formatFilter} onChange={(e) => setFormatFilter(e.target.value)} className="input w-full">
+              <option value="all">Ogni formato</option>
+              <option value="tankobon">Tankobon</option>
+              <option value="zashi">Zashi</option>
+            </select>
+            <select value={gradingFilter} onChange={(e) => setGradingFilter(e.target.value)} className="input w-full">
+              <option value="all">Raw e gradati</option>
+              <option value="raw">Solo raw</option>
+              <option value="graded">Solo gradati</option>
+            </select>
+            <select value={obiFilter} onChange={(e) => setObiFilter(e.target.value)} className="input w-full">
+              <option value="all">OBI: tutti</option>
+              <option value="yes">Con OBI</option>
+              <option value="no">Senza OBI</option>
+            </select>
+            <select
+              value={printingFilter}
+              onChange={(e) => setPrintingFilter(e.target.value)}
+              className="input w-full"
+            >
+              <option value="all">Ogni tiratura</option>
+              <option value="first">Prima stampa</option>
+              <option value="reprint">Ristampa</option>
+            </select>
+            <select value={valueFilter} onChange={(e) => setValueFilter(e.target.value)} className="input w-full">
+              <option value="all">Valore: tutti</option>
+              <option value="valued">Con valutazione</option>
+              <option value="missing">Da valutare</option>
+            </select>
+
+            {languages.length > 0 && (
+              <select
+                value={languageFilter}
+                onChange={(e) => setLanguageFilter(e.target.value)}
+                className="input w-full"
+              >
+                <option value="all">Ogni lingua</option>
+                {languages.map((language) => (
+                  <option key={language} value={language}>
+                    {language}
+                  </option>
+                ))}
+              </select>
+            )}
+            <select value={sort} onChange={(e) => setSort(e.target.value)} className="input w-full">
+              <option value="newest">Più recenti</option>
+              <option value="title">Titolo A-Z</option>
+              <option value="year_desc">Anno: più nuovi</option>
+              <option value="year_asc">Anno: più vecchi</option>
+              <option value="value_desc">Valore: decrescente</option>
+              <option value="value_asc">Valore: crescente</option>
+            </select>
+          </div>
+        )}
       </div>
 
       {filtered.length === 0 ? (
