@@ -1,5 +1,6 @@
 import type { MangaItem } from "@/lib/types";
 import { lookupMarketPrice } from "@/lib/pricing/westblue";
+import { revalueUserCollection } from "@/lib/pricing/revalue";
 import {
   mangaMutationSchema,
   mangaPatchSchema,
@@ -119,6 +120,26 @@ const functionTools = [
   },
   {
     type: "function",
+    name: "revalue_collection",
+    description:
+      "Rivaluta in un colpo solo TUTTI i pezzi della collezione leggendo il tracker West Blue e salvando subito i nuovi valori. Usalo quando l'utente chiede di rivalutare/aggiornare i prezzi della collezione (o di più pezzi): è molto più efficiente che chiamare lookup_market_price pezzo per pezzo. Non serve nessun altro tool dopo: i valori sono già salvati.",
+    parameters: {
+      type: "object",
+      properties: {
+        scope: {
+          type: "string",
+          enum: ["all", "missing_value"],
+          description:
+            "'all' rivaluta tutta la collezione; 'missing_value' solo i pezzi che non hanno ancora un valore",
+        },
+      },
+      required: ["scope"],
+      additionalProperties: false,
+    },
+    strict: false,
+  },
+  {
+    type: "function",
     name: "prepare_add_manga",
     description:
       "Completa e invia i dati di un manga che l'utente ha chiesto esplicitamente di aggiungere. Prima usa search_collection per evitare duplicati e web_search per metadati e valutazione.",
@@ -200,8 +221,14 @@ Prima di aggiungere:
   cercali online, usando foto, serie, numero ed edizione per disambiguare.
 
 VALUTAZIONE OBBLIGATORIA
-- per qualsiasi prezzo chiama SEMPRE lookup_market_price: legge direttamente
-  il tracker West Blue e restituisce le righe di vendita compatibili;
+- se l'utente chiede di rivalutare la collezione, aggiornare i prezzi o
+  ricalcolare i valori di più pezzi, chiama SUBITO revalue_collection una
+  sola volta: rivaluta e salva tutto in un colpo. Non ciclare con
+  lookup_market_price pezzo per pezzo e non chiamare prepare_update_manga
+  dopo, perché i valori sono già stati scritti;
+- per il prezzo di un SINGOLO pezzo chiama SEMPRE lookup_market_price: legge
+  direttamente il tracker West Blue e restituisce le righe di vendita
+  compatibili;
 - NON usare web_search per i prezzi: il tracker carica i dati via JavaScript e
   la ricerca web non riesce a leggerli, quindi concluderesti a torto che il
   dato non esiste;
@@ -322,9 +349,49 @@ function compactItem(item: MangaItem) {
 async function executeTool(
   call: FunctionCall,
   items: MangaItem[],
-  imageUrl: string | null
-): Promise<{ output: string; action?: ChatAction }> {
+  imageUrl: string | null,
+  userId: string
+): Promise<{ output: string; action?: ChatAction; sideEffects?: number }> {
   const args = JSON.parse(call.arguments || "{}") as Record<string, unknown>;
+
+  if (call.name === "revalue_collection") {
+    try {
+      const summary = await revalueUserCollection(userId, {
+        scope: args.scope === "missing_value" ? "missing_value" : "all",
+      });
+      const changed = summary.outcomes.filter((o) => o.changed);
+      return {
+        sideEffects: summary.items_updated,
+        output: JSON.stringify({
+          done: true,
+          instruction:
+            "I valori sono GIÀ stati salvati: riepiloga all'utente quanti pezzi sono cambiati, il nuovo totale e quelli senza comparabili. Non chiamare altri tool per questi pezzi.",
+          items_processed: summary.items_processed,
+          items_updated: summary.items_updated,
+          items_unpriced: summary.items_unpriced,
+          previous_total_eur: summary.previous_total,
+          new_total_eur: summary.new_total,
+          changed: changed.slice(0, 20).map((o) => ({
+            item: o.label,
+            from: o.previous_value,
+            to: o.new_value,
+            basis: o.basis,
+          })),
+          unpriced: summary.outcomes
+            .filter((o) => o.new_value == null)
+            .slice(0, 10)
+            .map((o) => o.label),
+        }),
+      };
+    } catch (cause) {
+      return {
+        output: JSON.stringify({
+          error: cause instanceof Error ? cause.message : "Rivalutazione fallita",
+          instruction: "Non inventare valori: spiega all'utente che il tracker non è raggiungibile.",
+        }),
+      };
+    }
+  }
 
   if (call.name === "lookup_market_price") {
     try {
@@ -414,6 +481,7 @@ export async function runCollectionChat({
   history,
   recentContext,
   items,
+  userId,
 }: {
   message: string;
   imageUrl: string | null;
@@ -421,10 +489,12 @@ export async function runCollectionChat({
   history: Array<{ role: "user" | "assistant"; text: string }>;
   recentContext: ChatEntityContext | null;
   items: MangaItem[];
+  userId: string;
 }): Promise<{
   responseId: string | null;
   text: string;
   actions: ChatAction[];
+  executed: number;
   intent: { valuation: boolean };
 }> {
   const requiresValuation =
@@ -462,6 +532,7 @@ export async function runCollectionChat({
   let response = await createResponse(initialRequest);
 
   const actions: ChatAction[] = [];
+  let executed = 0;
   let usedWebSearch = false;
   let usedPriceLookup = false;
   let priceLookupFoundValue = false;
@@ -476,6 +547,7 @@ export async function runCollectionChat({
         responseId: response.id,
         text: outputText(response) || "Operazione preparata.",
         actions,
+        executed,
         intent: { valuation: requiresValuation },
       };
     }
@@ -520,7 +592,8 @@ export async function runCollectionChat({
               }),
             };
           } else {
-            result = await executeTool(call, items, actionImageUrl);
+            result = await executeTool(call, items, actionImageUrl, userId);
+            executed += result.sideEffects ?? 0;
             if (call.name === "lookup_market_price") {
               usedPriceLookup = true;
               try {
@@ -560,6 +633,7 @@ export async function runCollectionChat({
         responseId: null,
         text: `Operazione pronta per ${names.join(", ")}.`,
         actions,
+        executed,
         intent: { valuation: requiresValuation },
       };
     }
@@ -581,6 +655,7 @@ export async function runCollectionChat({
     responseId: response.id,
     text: outputText(response) || "Ho preparato quanto possibile; controlla le proposte prima di confermare.",
     actions,
+    executed,
     intent: { valuation: requiresValuation },
   };
 }

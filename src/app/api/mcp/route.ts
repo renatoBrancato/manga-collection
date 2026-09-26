@@ -3,6 +3,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { z } from "zod";
 import { resolveUserIdByApiKey, insertItems, listItems, updateItem } from "@/lib/items";
 import { lookupMarketPrice } from "@/lib/pricing/westblue";
+import { revalueUserCollection } from "@/lib/pricing/revalue";
 
 /**
  * MCP server exposed to ChatGPT (or any MCP-compatible client) as a custom
@@ -65,43 +66,11 @@ REGOLE OBBLIGATORIE PER LE IMMAGINI
 - Se il client non può ridimensionare/comprimere, ometti 'image_base64' e
   salva prima i metadati; l'immagine potrà essere aggiunta successivamente.
 
-Per rivalutare tutta la collezione usa prima 'revalue_manga_collection', poi
-chiama 'lookup_market_price' per ogni elemento restituito e infine
-'update_manga_item' per ogni valore trovato. Non fermarti alla sola lista.`;
-
-function buildValuationCandidate(item: Awaited<ReturnType<typeof listItems>>[number]) {
-  return {
-    id: item.id,
-    series: item.series ?? item.title,
-    format: item.format,
-    volume_number: item.volume_number,
-    issue_number: item.issue_number,
-    release_year: item.release_year,
-    language: item.language,
-    publisher: item.publisher,
-    printing: item.is_first_print === true ? "first_print" : item.is_first_print === false ? "reprint" : "unknown",
-    obi: item.has_obi === true ? "with_obi" : item.has_obi === false ? "without_obi" : "unknown",
-    market_state: item.grading_authority
-      ? {
-          type: "graded",
-          authority: item.grading_authority,
-          grade: item.grading_value,
-        }
-      : {
-          type: "raw",
-          condition: item.condition_estimate,
-        },
-    current_estimated_value: item.estimated_value,
-    current_currency: item.currency,
-    search_instruction:
-      `Cerca "${item.series ?? item.title}"` +
-      `${item.volume_number != null ? ` volume ${item.volume_number}` : ""}` +
-      `${item.issue_number ? ` numero ${item.issue_number}` : ""}` +
-      ` come ${item.grading_authority ? `graded ${item.grading_authority}${item.grading_value != null ? ` ${item.grading_value}` : ""}` : "RAW"}` +
-      `${item.has_obi === true ? ", con OBI" : item.has_obi === false ? ", senza OBI" : ", OBI non noto"}` +
-      `${item.is_first_print === true ? ", prima stampa" : item.is_first_print === false ? ", ristampa" : ", stampa non nota"}.`,
-  };
-}
+Per rivalutare tutta la collezione usa 'revalue_manga_collection' UNA sola
+volta: calcola e salva i nuovi valori di tutti i pezzi lato server. Non
+chiamare 'lookup_market_price' o 'update_manga_item' pezzo per pezzo dopo di
+esso: serve solo a riepilogare il risultato. La collezione viene comunque
+rivalutata in automatico ogni giorno.`;
 
 function buildServer(userId: string) {
   const server = new McpServer(
@@ -306,7 +275,7 @@ function buildServer(userId: string) {
     {
       title: "Rivaluta la collezione",
       description:
-        `Prepara la rivalutazione della collezione usando ${PRICE_TRACKER_URL}. Dopo aver ricevuto l'elenco, il client DEVE visitare il tracker per ogni elemento, applicare i criteri indicati, leggere la media compatibile e aggiornare il prezzo tramite 'update_manga_item'. Non è sufficiente mostrare l'elenco all'utente.`,
+        `Rivaluta ed AGGIORNA in un'unica chiamata tutti i pezzi della collezione leggendo direttamente ${PRICE_TRACKER_URL}. Il calcolo avviene sul server (mediana per i RAW, riga esatta per i graded) e i valori vengono salvati subito: NON chiamare lookup_market_price o update_manga_item per gli stessi pezzi dopo questo tool. Restituisce il riepilogo da mostrare all'utente.`,
       inputSchema: {
         scope: z
           .enum(["all", "missing_value"])
@@ -315,36 +284,57 @@ function buildServer(userId: string) {
       },
     },
     async ({ scope }) => {
-      const items = await listItems(userId);
-      const selected = scope === "missing_value" ? items.filter((item) => item.estimated_value == null) : items;
-      const candidates = selected.map(buildValuationCandidate);
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                action_required:
-                  "Continua ora la procedura: chiama lookup_market_price per ciascun candidato e poi update_manga_item per ogni prezzo trovato. Non limitarti a presentare questa lista.",
-                source: PRICE_TRACKER_URL,
-                valuation_rules: [
-                  "Usa lookup_market_price: la navigazione web non legge le tabelle del tracker.",
-                  "Per i graded il tool restituisce la riga esatta con volume e voto; non fare medie tra graded diversi.",
-                  "Per i RAW il tool restituisce la media delle vendite compatibili.",
-                  "Usa suggested_value_eur come estimated_value: è già in EUR.",
-                  "Se OBI/stampa sono sconosciuti, chiedi chiarimenti o non aggiornare.",
-                  "Se suggested_value_eur è null, lascia il valore invariato e segnalalo.",
-                ],
-                count: candidates.length,
-                candidates,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
+      try {
+        const summary = await revalueUserCollection(userId, { scope });
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  done: true,
+                  instruction:
+                    "I valori sono già stati salvati. Riepiloga all'utente i pezzi cambiati, il nuovo totale e quelli rimasti senza valutazione, senza chiamare altri tool.",
+                  source: PRICE_TRACKER_URL,
+                  tracker_updated_at: summary.tracker_updated_at,
+                  usd_eur_rate: summary.usd_eur_rate,
+                  items_processed: summary.items_processed,
+                  items_updated: summary.items_updated,
+                  items_unpriced: summary.items_unpriced,
+                  previous_total_eur: summary.previous_total,
+                  new_total_eur: summary.new_total,
+                  changed: summary.outcomes
+                    .filter((outcome) => outcome.changed)
+                    .map((outcome) => ({
+                      item: outcome.label,
+                      from: outcome.previous_value,
+                      to: outcome.new_value,
+                      basis: outcome.basis,
+                      match_count: outcome.match_count,
+                    })),
+                  unpriced: summary.outcomes
+                    .filter((outcome) => outcome.new_value == null)
+                    .map((outcome) => ({ item: outcome.label, reason: outcome.note })),
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      } catch (cause) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                error: cause instanceof Error ? cause.message : "Rivalutazione fallita",
+                instruction: "Non inventare valori: riferisci che il tracker non è raggiungibile.",
+              }),
+            },
+          ],
+        };
+      }
     }
   );
 
@@ -366,8 +356,8 @@ function buildServer(userId: string) {
             type: "text",
             text:
               `Rivaluta la mia collezione (${scope ?? "all"}). ` +
-              "Chiama revalue_manga_collection, poi lookup_market_price per ogni candidato (la navigazione web non legge le tabelle del tracker). Per i RAW il tool dà la media, per i graded la riga esatta con stesso volume e voto. " +
-              "Aggiorna con update_manga_item soltanto gli elementi con dati compatibili e alla fine riepiloga valori precedenti, nuovi valori, elementi non aggiornati e motivazione.",
+              "Chiama revalue_manga_collection una sola volta: rivaluta e salva tutti i pezzi sul server, quindi non servono lookup_market_price né update_manga_item. " +
+              "Poi riepiloga valori precedenti, nuovi valori, totale della collezione ed elementi rimasti senza valutazione con la relativa motivazione.",
           },
         },
       ],

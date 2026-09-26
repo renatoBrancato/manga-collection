@@ -74,8 +74,20 @@ Apri http://localhost:3000 - verrai reindirizzato al login Google.
 
 1. Collega il repo a Vercel.
 2. Aggiungi le stesse variabili d'ambiente (incluso
-   `NEXT_PUBLIC_SITE_URL=https://TUO-DOMINIO.vercel.app`).
+   `NEXT_PUBLIC_SITE_URL=https://TUO-DOMINIO.vercel.app` e `CRON_SECRET`,
+   generabile con `openssl rand -hex 32`).
 3. Deploy.
+
+**Rivalutazione giornaliera.** `vercel.json` registra un Vercel Cron che ogni
+giorno alle 04:00 UTC chiama `/api/cron/revalue`: tutti i pezzi di tutte le
+collezioni vengono rivalutati dal tracker West Blue lato server (nessun token
+AI), i nuovi valori salvati e una riga per pezzo aggiunta a `price_history`.
+Vercel firma la chiamata con `Authorization: Bearer $CRON_SECRET`; senza la
+variabile l'endpoint risponde 401. Test manuale:
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" https://TUO-DOMINIO.vercel.app/api/cron/revalue
+```
 
 ### 5. Configura il connettore MCP in ChatGPT
 

@@ -24,6 +24,11 @@ export interface MangaItem {
   image_url: string | null;
   notes: string | null;
   source: "manual" | "mcp" | "chat";
+  /** Ultima rivalutazione riuscita (cron giornaliero o richiesta esplicita). */
+  valued_at: string | null;
+  /** Criterio usato per l'ultimo valore: mediana RAW o riga esatta graded. */
+  valuation_basis: string | null;
+  valuation_source: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -181,6 +181,21 @@ Decisioni prese sul modello dati:
   perché i tankobon possono essere certificati da enti di grading mentre
   le riviste (zashi) no (troppo spesse/economiche per essere slabbate).
 
+### Rivalutazione automatica
+
+- `src/lib/pricing/revalue.ts` rivaluta in batch le collezioni applicando le
+  stesse regole di `lookupMarketPrice` (mediana per i RAW, riga esatta per i
+  graded), ordinando i pezzi per serie così ogni file del tracker viene
+  scaricato una sola volta. Nessun LLM coinvolto.
+- Vercel Cron (`vercel.json`, 04:00 UTC) chiama `/api/cron/revalue`, protetto
+  da `CRON_SECRET`. Aggiorna tutti i pezzi ogni giorno, anche quelli con
+  valore inserito a mano.
+- Ogni valutazione scrive `items.valued_at` / `valuation_basis` e una riga in
+  `price_history` (una per pezzo al giorno, in upsert). Ogni esecuzione è
+  registrata in `valuation_runs`.
+- Koma (`revalue_collection`) e l'MCP (`revalue_manga_collection`) usano lo
+  stesso motore: una sola tool call rivaluta e salva tutta la collezione.
+
 ## 6. Gestione schema database (Supabase CLI)
 
 Il progetto è **collegato via Supabase CLI** (`supabase link`) al

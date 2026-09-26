@@ -39,6 +39,7 @@ export async function POST(request: Request) {
       history: body.history ?? [],
       recentContext: body.recentContext ?? null,
       items,
+      userId: user.id,
     });
 
     if (result.actions.length === 0) {
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
       responseId: result.responseId,
       text: [successText, errorText && `Non completato:\n${errorText}`].filter(Boolean).join("\n\n"),
       actions: [],
-      executed: succeeded.length,
+      executed: succeeded.length + result.executed,
       recentContext:
         succeeded.length > 0
           ? (() => {
