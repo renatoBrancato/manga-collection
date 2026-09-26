@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { MangaItem } from "@/lib/types";
 import CoverImage from "@/components/CoverImage";
 import EditItemModal from "@/components/EditItemModal";
+import ItemHistoryModal from "@/components/ItemHistoryModal";
 
 const FORMAT_LABELS: Record<string, string> = {
   tankobon: "Tankobon",
@@ -34,6 +35,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MangaItem | null>(null);
+  const [historyItem, setHistoryItem] = useState<MangaItem | null>(null);
 
   const languages = useMemo(
     () =>
@@ -314,14 +316,24 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
                   {item.printing_notes ? ` (${item.printing_notes})` : ""}
                 </p>
                 <p className="truncate text-slate-500">{formatCondition(item)}</p>
-                <p className="mt-auto font-semibold text-emerald-400">
-                  {item.estimated_value != null
-                    ? item.estimated_value.toLocaleString("it-IT", {
-                        style: "currency",
-                        currency: item.currency || "EUR",
-                      })
-                    : "-"}
-                </p>
+                <button
+                  type="button"
+                  onClick={() => setHistoryItem(item)}
+                  title="Andamento del valore"
+                  className="mt-auto flex items-center justify-between gap-1 rounded-md text-left font-semibold text-emerald-400 transition hover:text-emerald-300"
+                >
+                  <span className="truncate">
+                    {item.estimated_value != null
+                      ? item.estimated_value.toLocaleString("it-IT", {
+                          style: "currency",
+                          currency: item.currency || "EUR",
+                        })
+                      : "-"}
+                  </span>
+                  <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-slate-500">
+                    <path d="M1 12l4-4 3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
               </div>
             </div>
           ))}
@@ -329,6 +341,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
       )}
 
       {editingItem && <EditItemModal item={editingItem} onClose={() => setEditingItem(null)} />}
+      {historyItem && <ItemHistoryModal item={historyItem} onClose={() => setHistoryItem(null)} />}
     </div>
   );
 }

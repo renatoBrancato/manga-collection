@@ -186,12 +186,15 @@ export async function revalueUserCollection(
     const result = entry.result;
     const value = result.suggested_value_eur;
 
+    // Senza vendite compatibili il pezzo mantiene il valore precedente: lo
+    // storico registra il valore effettivo, non un buco che farebbe
+    // sembrare crollato il totale della collezione.
     historyRows.push({
       item_id: item.id,
       user_id: userId,
-      value,
+      value: value ?? previous,
       currency: "EUR",
-      basis: result.suggested_basis,
+      basis: value == null ? (previous == null ? "none" : "invariato_nessuna_vendita") : result.suggested_basis,
       match_count: result.match_count,
       source: SOURCE,
       captured_at: capturedAt,
@@ -232,7 +235,7 @@ export async function revalueUserCollection(
   if (historyRows.length > 0) {
     const { error } = await admin
       .from("price_history")
-      .upsert(historyRows, { onConflict: "item_id,captured_on,source" });
+      .upsert(historyRows, { onConflict: "item_id,captured_on" });
     if (error) {
       // Lo storico è accessorio: un suo fallimento non deve impedire
       // l'aggiornamento dei prezzi.

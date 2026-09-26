@@ -8,6 +8,8 @@ import KpiBar from "@/components/KpiBar";
 import ShareButton from "@/components/ShareButton";
 import AiChatPanel from "@/components/AiChatPanel";
 import CollectionHero from "@/components/CollectionHero";
+import CollectionValueChart from "@/components/CollectionValueChart";
+import { loadCollectionHistory } from "@/lib/history";
 import type { MangaItem } from "@/lib/types";
 
 export default async function DashboardPage() {
@@ -18,9 +20,10 @@ export default async function DashboardPage() {
 
   if (!user) redirect("/login");
 
-  const [{ data: items }, { data: profile }] = await Promise.all([
+  const [{ data: items }, { data: profile }, history] = await Promise.all([
     supabase.from("items").select("*").order("created_at", { ascending: false }),
     supabase.from("profiles").select("share_enabled, share_slug").eq("id", user.id).single(),
+    loadCollectionHistory(supabase, user.id),
   ]);
 
   return (
@@ -49,6 +52,8 @@ export default async function DashboardPage() {
       />
 
       <KpiBar items={(items ?? []) as MangaItem[]} />
+
+      <CollectionValueChart points={history} />
 
       <div className="mb-6">
         <AddItemForm userId={user.id} />

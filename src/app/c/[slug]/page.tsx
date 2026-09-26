@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabase/server";
 import ItemsTable from "@/components/ItemsTable";
 import KpiBar from "@/components/KpiBar";
 import CollectionHero from "@/components/CollectionHero";
+import CollectionValueChart from "@/components/CollectionValueChart";
+import { loadCollectionHistory } from "@/lib/history";
 import type { MangaItem } from "@/lib/types";
 
 /**
@@ -29,11 +31,10 @@ export default async function SharedCollectionPage({
 
   if (!profile || !profile.share_enabled) notFound();
 
-  const { data: items } = await admin
-    .from("items")
-    .select("*")
-    .eq("user_id", profile.id)
-    .order("created_at", { ascending: false });
+  const [{ data: items }, history] = await Promise.all([
+    admin.from("items").select("*").eq("user_id", profile.id).order("created_at", { ascending: false }),
+    loadCollectionHistory(admin, profile.id),
+  ]);
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-slate-50 sm:px-8">
@@ -50,6 +51,8 @@ export default async function SharedCollectionPage({
       />
 
       <KpiBar items={(items ?? []) as MangaItem[]} />
+
+      <CollectionValueChart points={history} />
 
       <ItemsTable items={(items ?? []) as MangaItem[]} readOnly />
     </main>

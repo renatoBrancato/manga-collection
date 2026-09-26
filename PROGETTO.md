@@ -196,6 +196,24 @@ Decisioni prese sul modello dati:
 - Koma (`revalue_collection`) e l'MCP (`revalue_manga_collection`) usano lo
   stesso motore: una sola tool call rivaluta e salva tutta la collezione.
 
+### Storico prezzi
+
+- Un trigger su `items` (`log_item_value`) registra in `price_history` ogni
+  variazione di valore, da qualunque fonte: form nel browser, Koma, MCP, cron.
+  Una riga per pezzo al giorno (l'ultima scrittura della giornata vince).
+- Lo storico **sopravvive all'eliminazione** del pezzo (nessuna FK su
+  `item_id`): alla rimozione viene scritta una riga `removed` con valore
+  nullo, così il pezzo esce dal totale da quel giorno ma i giorni passati
+  restano invariati.
+- Se il cron non trova vendite compatibili registra il valore precedente,
+  non un buco.
+- `collection_value_history(user)` calcola il totale giornaliero usando
+  l'ultimo valore noto di ogni pezzo; `item_value_history(item)` restituisce
+  lo storico del singolo pezzo. Entrambe sono accessibili solo al
+  proprietario o se la collezione è condivisa.
+- UI: grafico della collezione sotto i KPI (dashboard e vista pubblica) e
+  storico del pezzo cliccando il valore sulla card.
+
 ## 6. Gestione schema database (Supabase CLI)
 
 Il progetto è **collegato via Supabase CLI** (`supabase link`) al
