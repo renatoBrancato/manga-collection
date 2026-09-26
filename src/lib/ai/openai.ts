@@ -1,4 +1,5 @@
 import type { MangaItem } from "@/lib/types";
+import { lookupMarketPrice } from "@/lib/pricing/westblue";
 import {
   mangaMutationSchema,
   mangaPatchSchema,
@@ -98,6 +99,26 @@ const functionTools = [
   },
   {
     type: "function",
+    name: "lookup_market_price",
+    description:
+      "Legge direttamente il Manga Price Tracker di West Blue e restituisce le vendite compatibili con il pezzo, con il valore suggerito già convertito in EUR. È la fonte OBBLIGATORIA per qualsiasi prezzo: usalo sempre invece della ricerca web, che non riesce a leggere le tabelle del tracker.",
+    parameters: {
+      type: "object",
+      properties: {
+        series: { type: "string", description: "Nome della serie in inglese, es. 'Attack on Titan'" },
+        volume: { type: ["number", "null"], description: "Numero del volume" },
+        format: { type: ["string", "null"], enum: ["tankobon", "zashi", null] },
+        graded: { type: "boolean", description: "true se il pezzo è in slab gradato, false se RAW" },
+        grade: { type: ["number", "null"], description: "Voto di grading, es. 8.0" },
+        has_obi: { type: ["boolean", "null"], description: "true con OBI, false senza, null se ignoto" },
+      },
+      required: ["series", "graded"],
+      additionalProperties: false,
+    },
+    strict: false,
+  },
+  {
+    type: "function",
     name: "prepare_add_manga",
     description:
       "Completa e invia i dati di un manga che l'utente ha chiesto esplicitamente di aggiungere. Prima usa search_collection per evitare duplicati e web_search per metadati e valutazione.",
@@ -179,22 +200,25 @@ Prima di aggiungere:
   cercali online, usando foto, serie, numero ed edizione per disambiguare.
 
 VALUTAZIONE OBBLIGATORIA
-- prima di chiamare prepare_add_manga o prepare_update_manga, cerca il valore
-  su https://westblue.shop/pages/manga-price-tracker;
-- cerca serie e volume/numero esatti;
-- non mescolare RAW e graded, con OBI e senza OBI, prima stampa e ristampa;
-- per un graded usa la riga esatta che coincide con volume, ente e voto
-  quando presenti: non fare medie tra graded diversi e non usare il prezzo
-  di un'altra fascia di grading;
-- per RAW usa la media delle vendite recenti mostrata dal tracker;
-- non usare il prezzo più alto e non fare medie tra categorie differenti;
-- se la media è in USD, converti in EUR al cambio corrente;
-- inserisci il risultato in estimated_value e EUR in currency;
-- riporta in notes una nota sintetica sulla fonte/media West Blue;
-- se West Blue non ha alcun dato compatibile, lascia estimated_value vuoto ma
-  scrivi chiaramente in notes che non esistono comparabili compatibili.
-- usa al massimo 3 ricerche web mirate per richiesta: una per identificare
-  l'edizione/metadati, una per West Blue e una eventuale verifica finale.
+- per qualsiasi prezzo chiama SEMPRE lookup_market_price: legge direttamente
+  il tracker West Blue e restituisce le righe di vendita compatibili;
+- NON usare web_search per i prezzi: il tracker carica i dati via JavaScript e
+  la ricerca web non riesce a leggerli, quindi concluderesti a torto che il
+  dato non esiste;
+- passa serie in inglese, volume, graded (true/false), grade e has_obi;
+- per un graded il tool restituisce la riga esatta con stesso volume e voto:
+  usa quel prezzo, non una media tra graded diversi;
+- per RAW il tool restituisce la media delle vendite compatibili;
+- il campo suggested_value_eur è già convertito in EUR: copialo in
+  estimated_value e imposta currency EUR;
+- riporta in notes la base usata (suggested_basis) e la fonte West Blue;
+- solo se suggested_value_eur è null lascia estimated_value vuoto e scrivi in
+  notes che non esistono vendite compatibili.
+
+RICERCA WEB (solo metadati)
+- usa web_search soltanto per metadati pubblici come anno, editore, lingua e
+  ISBN, mai per i prezzi;
+- usa al massimo 2 ricerche web per richiesta;
 - dopo le ricerche chiama sempre il tool di aggiunta/aggiornamento: non
   terminare con una semplice spiegazione testuale.
 
@@ -295,12 +319,34 @@ function compactItem(item: MangaItem) {
   };
 }
 
-function executeTool(
+async function executeTool(
   call: FunctionCall,
   items: MangaItem[],
   imageUrl: string | null
-): { output: string; action?: ChatAction } {
+): Promise<{ output: string; action?: ChatAction }> {
   const args = JSON.parse(call.arguments || "{}") as Record<string, unknown>;
+
+  if (call.name === "lookup_market_price") {
+    try {
+      const result = await lookupMarketPrice({
+        series: String(args.series ?? "").trim(),
+        volume: typeof args.volume === "number" ? args.volume : null,
+        format: args.format === "zashi" ? "zashi" : "tankobon",
+        graded: args.graded === true,
+        grade: typeof args.grade === "number" ? args.grade : null,
+        hasObi: typeof args.has_obi === "boolean" ? args.has_obi : null,
+      });
+      return { output: JSON.stringify(result) };
+    } catch (cause) {
+      return {
+        output: JSON.stringify({
+          error: cause instanceof Error ? cause.message : "Tracker non raggiungibile",
+          instruction:
+            "Il tracker non è raggiungibile: non inventare un prezzo. Procedi senza estimated_value e spiega il motivo nelle note.",
+        }),
+      };
+    }
+  }
 
   if (call.name === "search_collection") {
     const query = String(args.query ?? "").trim().toLowerCase();
@@ -408,7 +454,7 @@ export async function runCollectionChat({
     tools,
     reasoning: { effort: "low" },
     max_output_tokens: 3000,
-    max_tool_calls: 4,
+    max_tool_calls: 6,
     include: ["web_search_call.action.sources"],
     input: [...compactHistory, { role: "user", content }],
   };
@@ -417,6 +463,8 @@ export async function runCollectionChat({
 
   const actions: ChatAction[] = [];
   let usedWebSearch = false;
+  let usedPriceLookup = false;
+  let priceLookupFoundValue = false;
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
     if (response.output.some((item) => item.type === "web_search_call")) {
@@ -432,64 +480,73 @@ export async function runCollectionChat({
       };
     }
 
-    const outputs = calls.map((call) => {
-      let result: ReturnType<typeof executeTool>;
-      try {
-        const args = JSON.parse(call.arguments || "{}") as Record<string, unknown>;
-        const valuationNotes = typeof args.notes === "string" ? args.notes.toLowerCase() : "";
-        const documentsMissingComparable =
-          valuationNotes.includes("west blue") &&
-          (valuationNotes.includes("nessun") ||
-            valuationNotes.includes("non disponibile") ||
-            valuationNotes.includes("senza comparabil"));
+    const outputs = await Promise.all(
+      calls.map(async (call) => {
+        let result: Awaited<ReturnType<typeof executeTool>>;
+        try {
+          const args = JSON.parse(call.arguments || "{}") as Record<string, unknown>;
 
-        if (call.name === "prepare_add_manga" && requiresWebResearch && !usedWebSearch) {
+          if (call.name === "prepare_add_manga" && requiresWebResearch && !usedWebSearch && !usedPriceLookup) {
+            result = {
+              output: JSON.stringify({
+                error: "Dati non ancora verificati",
+                instruction:
+                  "Usa prima lookup_market_price per il valore e, se servono, web_search per i metadati pubblici. Poi richiama lo stesso tool con i dati arricchiti.",
+              }),
+            };
+          } else if (
+            (call.name === "prepare_update_manga" || call.name === "prepare_add_manga") &&
+            requiresValuation &&
+            !usedPriceLookup
+          ) {
+            result = {
+              output: JSON.stringify({
+                error: "Valutazione non ancora eseguita",
+                instruction:
+                  "Chiama prima lookup_market_price con serie, volume, graded, grade e has_obi. Poi richiama questo tool usando suggested_value_eur come estimated_value.",
+              }),
+            };
+          } else if (
+            call.name === "prepare_update_manga" &&
+            requiresValuation &&
+            args.estimated_value === undefined &&
+            priceLookupFoundValue
+          ) {
+            result = {
+              output: JSON.stringify({
+                error: "Aggiornamento del valore incompleto",
+                instruction:
+                  "lookup_market_price ha restituito un valore compatibile: richiama il tool inserendolo in estimated_value con currency EUR.",
+              }),
+            };
+          } else {
+            result = await executeTool(call, items, actionImageUrl);
+            if (call.name === "lookup_market_price") {
+              usedPriceLookup = true;
+              try {
+                const parsed = JSON.parse(result.output) as { suggested_value_eur?: number | null };
+                if (typeof parsed.suggested_value_eur === "number") priceLookupFoundValue = true;
+              } catch {
+                // Output non interpretabile: si mantiene lo stato corrente.
+              }
+            }
+            if (result.action) actions.push(result.action);
+          }
+        } catch (cause) {
           result = {
             output: JSON.stringify({
-              error: "Ricerca web obbligatoria non ancora eseguita",
-              instruction:
-                "Usa ora web_search per completare metadati e valutazione West Blue, poi richiama lo stesso tool con i dati arricchiti.",
+              error: cause instanceof Error ? cause.message : "Argomenti del tool non validi",
+              instruction: "Correggi gli argomenti e riprova, oppure chiedi chiarimenti all'utente.",
             }),
           };
-        } else if (call.name === "prepare_update_manga" && requiresValuation && !usedWebSearch) {
-          result = {
-            output: JSON.stringify({
-              error: "Ricerca web del valore non ancora eseguita",
-              instruction:
-                "Usa ora web_search su West Blue per il pezzo esatto. Poi richiama prepare_update_manga con estimated_value in EUR oppure con notes che dichiarino esplicitamente l'assenza di comparabili compatibili.",
-            }),
-          };
-        } else if (
-          call.name === "prepare_update_manga" &&
-          requiresValuation &&
-          args.estimated_value === undefined &&
-          !documentsMissingComparable
-        ) {
-          result = {
-            output: JSON.stringify({
-              error: "Aggiornamento del valore incompleto",
-              instruction:
-                "Non dichiarare il prezzo aggiornato senza estimated_value. Se West Blue non offre comparabili compatibili, richiama il tool con una nota esplicita e non inventare un valore.",
-            }),
-          };
-        } else {
-          result = executeTool(call, items, actionImageUrl);
-          if (result.action) actions.push(result.action);
         }
-      } catch (cause) {
-        result = {
-          output: JSON.stringify({
-            error: cause instanceof Error ? cause.message : "Argomenti del tool non validi",
-            instruction: "Correggi gli argomenti e riprova, oppure chiedi chiarimenti all'utente.",
-          }),
+        return {
+          type: "function_call_output",
+          call_id: call.call_id,
+          output: result.output,
         };
-      }
-      return {
-        type: "function_call_output",
-        call_id: call.call_id,
-        output: result.output,
-      };
-    });
+      })
+    );
 
     if (actions.length > 0) {
       const names = actions.map((action) =>
@@ -513,7 +570,7 @@ export async function runCollectionChat({
       tools,
       reasoning: { effort: "low" },
       max_output_tokens: 3000,
-      max_tool_calls: 4,
+      max_tool_calls: 6,
       include: ["web_search_call.action.sources"],
       previous_response_id: response.id,
       input: outputs,

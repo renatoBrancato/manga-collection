@@ -25,6 +25,9 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* text-base (16px) su mobile: sotto i 16px iOS Safari applica uno zoom
+   automatico al focus, che lascia la pagina zoomata e scrollabile in
+   orizzontale anche dopo aver chiuso il campo. */
 .input {
-  @apply rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-50 placeholder-slate-500 outline-none focus:border-indigo-500;
+  @apply rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-base text-slate-50 placeholder-slate-500 outline-none focus:border-indigo-500 sm:text-sm;
 }

@@ -137,6 +137,25 @@ export default function AiChatPanel({ userId }: { userId: string }) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading, open]);
 
+  // Su mobile la chat è a schermo intero: bloccare lo scroll del documento
+  // evita che sotto l'overlay resti attiva la pagina e compaiano scroll
+  // orizzontali una volta richiusa.
+  useEffect(() => {
+    if (!open) return;
+    const isMobile = window.matchMedia("(max-width: 639px)").matches;
+    if (!isMobile) return;
+
+    const { overflow, position, width } = document.body.style;
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "relative";
+    document.body.style.width = "100%";
+    return () => {
+      document.body.style.overflow = overflow;
+      document.body.style.position = position;
+      document.body.style.width = width;
+    };
+  }, [open]);
+
   useEffect(() => {
     return () => {
       if (imagePreview) URL.revokeObjectURL(imagePreview);
@@ -305,8 +324,8 @@ export default function AiChatPanel({ userId }: { userId: string }) {
   }
 
   return (
-    <section className="fixed inset-x-2 bottom-2 top-2 z-40 flex flex-col overflow-hidden rounded-3xl border border-white/10 bg-slate-950/95 shadow-2xl shadow-black/70 backdrop-blur-xl sm:inset-x-auto sm:bottom-5 sm:right-5 sm:top-auto sm:h-[min(780px,88vh)] sm:w-[520px]">
-      <header className="relative overflow-hidden border-b border-white/10 bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-5 py-4">
+    <section className="fixed inset-0 z-50 flex flex-col overflow-hidden border-white/10 bg-slate-950/95 shadow-2xl shadow-black/70 backdrop-blur-xl sm:inset-auto sm:bottom-5 sm:right-5 sm:z-40 sm:h-[min(780px,88vh)] sm:w-[520px] sm:rounded-3xl sm:border">
+      <header className="relative shrink-0 overflow-hidden border-b border-white/10 bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-5 py-4 pt-[max(1rem,env(safe-area-inset-top))] sm:pt-4">
         <div className="absolute -right-10 -top-14 h-36 w-36 rounded-full bg-white/10 blur-2xl" />
         <div className="relative flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -444,7 +463,10 @@ export default function AiChatPanel({ userId }: { userId: string }) {
         <div ref={bottomRef} />
       </div>
 
-      <form onSubmit={handleSubmit} className="border-t border-white/10 bg-slate-950/90 p-3.5 sm:p-4">
+      <form
+        onSubmit={handleSubmit}
+        className="shrink-0 border-t border-white/10 bg-slate-950/90 p-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] sm:p-4 sm:pb-4"
+      >
         {!imagePreview && contextImageUrl && (
           <div className="mb-3 flex items-center gap-3 rounded-xl border border-white/8 bg-slate-900 p-2.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -494,7 +516,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
             }}
             rows={2}
             placeholder="Scrivi a Koma o allega una foto..."
-            className="min-h-10 flex-1 resize-none bg-transparent px-1 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-600"
+            className="min-h-10 flex-1 resize-none bg-transparent px-1 py-2 text-base text-slate-100 outline-none placeholder:text-slate-600 sm:text-sm"
           />
           <button
             type="submit"

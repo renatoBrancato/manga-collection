@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
 import { resolveUserIdByApiKey, insertItems, listItems, updateItem } from "@/lib/items";
+import { lookupMarketPrice } from "@/lib/pricing/westblue";
 
 /**
  * MCP server exposed to ChatGPT (or any MCP-compatible client) as a custom
@@ -29,26 +30,29 @@ const PRICE_TRACKER_INSTRUCTIONS = `REGOLE OBBLIGATORIE PER LE VALUTAZIONI
 La fonte primaria per 'estimated_value' è il Manga Price Tracker di West Blue
 Collectibles: ${PRICE_TRACKER_URL}
 
+IMPORTANTE: non tentare di leggere il prezzo navigando la pagina. Il tracker
+carica le vendite via JavaScript, quindi la navigazione web NON vede le righe
+e concluderebbe a torto che il dato non esiste. Usa sempre il tool
+'lookup_market_price' di questo server, che interroga direttamente il dataset.
+
 Prima di aggiungere, aggiornare o rivalutare un elemento:
 1. Identifica l'edizione esatta: serie, volume/numero, lingua, anno, prima
    stampa/ristampa, stato RAW o graded, ente/voto di grading e presenza OBI.
-2. Cerca l'elemento su West Blue e applica filtri compatibili con il pezzo:
-   - RAW e graded non devono mai essere mescolati;
-   - con OBI e senza OBI non devono mai essere mescolati;
-   - per un graded usa, quando disponibile, lo stesso ente e lo stesso voto;
-   - non usare dati di una prima stampa per una ristampa o viceversa.
-3. Per i RAW usa la MEDIA mostrata dal tracker per quella combinazione esatta
-   di filtri, basata sulle vendite recenti. Per i graded usa invece il prezzo
-   della riga esatta che corrisponde a volume, ente e voto; non fare medie
-   tra graded diversi e non usare il prezzo di una fascia di grading diversa.
-4. Se un attributo decisivo non è noto (per esempio OBI o prima stampa), non
+2. Chiama 'lookup_market_price' con serie (in inglese), volume, 'graded',
+   'grade' e 'has_obi'. Il tool applica già i filtri compatibili:
+   - RAW e graded non vengono mai mescolati;
+   - con OBI e senza OBI non vengono mai mescolati;
+   - per un graded viene usato lo stesso volume e lo stesso voto.
+3. Per i RAW il tool restituisce la media delle vendite compatibili. Per i
+   graded restituisce il prezzo della riga esatta corrispondente a volume e
+   voto: non fare medie tra graded diversi e non usare una fascia differente.
+4. Usa 'suggested_value_eur' come 'estimated_value' (è già convertito in EUR)
+   e imposta 'currency' su EUR.
+5. Se un attributo decisivo non è noto (per esempio OBI o prima stampa), non
    inventarlo: chiedi chiarimenti oppure non valorizzare il prezzo.
-5. Se West Blue non contiene vendite compatibili, dichiaralo chiaramente e
-   lascia 'estimated_value' invariato/omesso. Non sostituire silenziosamente
-   la fonte e non allargare i filtri solo per ottenere un risultato.
-6. West Blue può mostrare USD: converti la media in EUR al cambio corrente,
-   salva 'currency' come EUR e comunica sinteticamente media originale,
-   cambio applicato e risultato arrotondato a due decimali.
+6. Se 'suggested_value_eur' è null non esistono vendite compatibili:
+   dichiaralo e lascia 'estimated_value' invariato/omesso. Non sostituire
+   silenziosamente la fonte e non allargare i filtri per ottenere un risultato.
 
 REGOLE OBBLIGATORIE PER LE IMMAGINI
 - 'image_base64' deve rappresentare un'immagine JPEG/PNG/WebP/GIF di massimo
@@ -62,8 +66,8 @@ REGOLE OBBLIGATORIE PER LE IMMAGINI
   salva prima i metadati; l'immagine potrà essere aggiunta successivamente.
 
 Per rivalutare tutta la collezione usa prima 'revalue_manga_collection', poi
-consulta West Blue per ogni elemento restituito e chiama 'update_manga_item'
-solo per quelli con una media compatibile. Non fermarti alla sola lista.`;
+chiama 'lookup_market_price' per ogni elemento restituito e infine
+'update_manga_item' per ogni valore trovato. Non fermarti alla sola lista.`;
 
 function buildValuationCandidate(item: Awaited<ReturnType<typeof listItems>>[number]) {
   return {
@@ -257,6 +261,47 @@ function buildServer(userId: string) {
   );
 
   server.registerTool(
+    "lookup_market_price",
+    {
+      title: "Cerca il valore di mercato su West Blue",
+      description:
+        `Interroga direttamente il Manga Price Tracker di West Blue (${PRICE_TRACKER_URL}) e restituisce le vendite compatibili con il pezzo, con il valore suggerito già convertito in EUR. Usa SEMPRE questo tool per i prezzi: la pagina carica i dati via JavaScript, quindi la navigazione web non riesce a leggerli. Per i graded restituisce la riga esatta con stesso volume e voto; per i RAW la media delle vendite compatibili.`,
+      inputSchema: {
+        series: z.string().describe("Nome della serie in inglese, es. 'Attack on Titan'"),
+        volume: z.number().optional().describe("Numero del volume"),
+        format: z.enum(["tankobon", "zashi"]).optional().default("tankobon"),
+        graded: z.boolean().describe("true se il pezzo è in slab gradato, false se RAW"),
+        grade: z.number().optional().describe("Voto di grading, es. 8.0"),
+        has_obi: z.boolean().optional().describe("true con OBI, false senza; ometti se non noto"),
+      },
+    },
+    async ({ series, volume, format, graded, grade, has_obi }) => {
+      try {
+        const result = await lookupMarketPrice({
+          series,
+          volume: volume ?? null,
+          format: format ?? "tankobon",
+          graded,
+          grade: grade ?? null,
+          hasObi: has_obi ?? null,
+        });
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : "Tracker non raggiungibile";
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Errore nella consultazione del tracker: ${message}. Non inventare un prezzo: lascia 'estimated_value' invariato.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.registerTool(
     "revalue_manga_collection",
     {
       title: "Rivaluta la collezione",
@@ -281,17 +326,15 @@ function buildServer(userId: string) {
             text: JSON.stringify(
               {
                 action_required:
-                  "Continua ora la procedura: visita West Blue per ciascun candidato, usa la media mostrata solo con filtri compatibili e chiama update_manga_item per ogni prezzo verificato. Non limitarti a presentare questa lista.",
+                  "Continua ora la procedura: chiama lookup_market_price per ciascun candidato e poi update_manga_item per ogni prezzo trovato. Non limitarti a presentare questa lista.",
                 source: PRICE_TRACKER_URL,
                 valuation_rules: [
-                  "Non mescolare RAW e graded.",
-                  "Non mescolare con OBI e senza OBI.",
-                  "Per i graded usa il prezzo della riga esatta con volume, ente e voto; non fare medie tra graded diversi.",
-                  "Per i RAW usa la media mostrata dal tracker.",
-                  "Non mescolare prima stampa e ristampa.",
+                  "Usa lookup_market_price: la navigazione web non legge le tabelle del tracker.",
+                  "Per i graded il tool restituisce la riga esatta con volume e voto; non fare medie tra graded diversi.",
+                  "Per i RAW il tool restituisce la media delle vendite compatibili.",
+                  "Usa suggested_value_eur come estimated_value: è già in EUR.",
                   "Se OBI/stampa sono sconosciuti, chiedi chiarimenti o non aggiornare.",
-                  "Se non esistono vendite compatibili, lascia il valore invariato e segnalalo.",
-                  "Se la media è in USD, convertila in EUR al cambio corrente e comunica il calcolo.",
+                  "Se suggested_value_eur è null, lascia il valore invariato e segnalalo.",
                 ],
                 count: candidates.length,
                 candidates,
@@ -323,7 +366,7 @@ function buildServer(userId: string) {
             type: "text",
             text:
               `Rivaluta la mia collezione (${scope ?? "all"}). ` +
-              "Chiama revalue_manga_collection, poi visita West Blue per ogni candidato, applica esattamente i filtri richiesti. Per i RAW usa la media mostrata, per i graded usa il prezzo della riga esatta con stesso volume, ente e voto. " +
+              "Chiama revalue_manga_collection, poi lookup_market_price per ogni candidato (la navigazione web non legge le tabelle del tracker). Per i RAW il tool dà la media, per i graded la riga esatta con stesso volume e voto. " +
               "Aggiorna con update_manga_item soltanto gli elementi con dati compatibili e alla fine riepiloga valori precedenti, nuovi valori, elementi non aggiornati e motivazione.",
           },
         },

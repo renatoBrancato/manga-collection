@@ -105,14 +105,20 @@ completo e `supabase/migrations/` per lo schema SQL):
 | `estimated_value` + `currency` | valore di mercato stimato |
 | `source` | `manual` (form) o `mcp` (inserito via ChatGPT) |
 
-**Fonte prezzi primaria**: per `estimated_value`, il server MCP istruisce
-ChatGPT (via `instructions` del server + descrizione dei campi) a consultare
-https://westblue.shop/pages/manga-price-tracker e usare la media mostrata
-solo per vendite compatibili con edizione, RAW, OBI e stampa. Per i graded
-si usa invece il prezzo della riga esatta che corrisponde a volume, ente e
-voto; non si fanno medie tra graded diversi. Se non ci sono dati compatibili,
-il valore resta invariato/omesso: non vengono usati fallback silenziosi o
-filtri più larghi.
+**Fonte prezzi primaria**: per `estimated_value` si usa il Manga Price
+Tracker di West Blue. La pagina pubblica carica però le vendite via
+JavaScript da un indice JSON su CDN: una ricerca web o una navigazione
+vedono solo il testo statico e concluderebbero a torto che il prezzo non
+esiste. Per questo `src/lib/pricing/westblue.ts` interroga **direttamente il
+dataset**, ed è esposto sia a Koma sia all'MCP come tool
+`lookup_market_price`.
+
+Il tool applica i filtri compatibili (volume, OBI, RAW/graded), e restituisce:
+per i **graded** il prezzo della riga esatta con stesso volume e voto (mai una
+media tra graded diversi); per i **RAW** la media delle vendite compatibili.
+Il valore è già convertito in EUR. Se non esistono vendite compatibili
+`suggested_value_eur` è `null` e il valore resta vuoto, con il motivo nelle
+note: non vengono usati fallback silenziosi o filtri più larghi.
 
 Il tool `revalue_manga_collection` prepara i criteri di ricerca per tutti gli
 elementi (o solo quelli senza prezzo); ChatGPT deve poi visitare West Blue e
