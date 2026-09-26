@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import ItemsTable from "@/components/ItemsTable";
 import KpiBar from "@/components/KpiBar";
+import CollectionHero from "@/components/CollectionHero";
 import type { MangaItem } from "@/lib/types";
 
 /**
@@ -36,19 +37,17 @@ export default async function SharedCollectionPage({
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-slate-50 sm:px-8">
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">
-            📚 Collezione di {profile.display_name || "un collezionista"}
-          </h1>
-          <p className="text-sm text-slate-400">
-            👁️ Sola lettura — condivisa pubblicamente,{" "}
-            <Link href="/dashboard" className="underline hover:text-slate-300">
-              gestisci la tua su Manga Collection
-            </Link>
-          </p>
-        </div>
-      </header>
+      <CollectionHero
+        eyebrow="私のコレクション · Sola lettura"
+        title={`La collezione di ${profile.display_name || "un collezionista"},`}
+        highlight="volume dopo volume."
+        description="Una raccolta condivisa pubblicamente: sfogliala, ma solo il proprietario può modificarla."
+        footer={
+          <Link href="/dashboard" className="underline transition hover:text-slate-300">
+            Gestisci la tua collezione su Manga Collection
+          </Link>
+        }
+      />
 
       <KpiBar items={(items ?? []) as MangaItem[]} />
 
