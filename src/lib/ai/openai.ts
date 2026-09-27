@@ -277,6 +277,14 @@ Quando ricevi una o più foto:
   copertina di nessuno di essi;
 - in cover_photo indica il numero della foto frontale di quel pezzo;
 - analizza copertina, dorso, colophon ed eventuale slab;
+- la serie è il LOGO principale della copertina. Il numero di volume nei
+  tankōbon giapponesi è spesso in kanji vicino al logo o sul dorso:
+  巻一=1, 巻十=10, 巻四十=40, 巻ノ六十=60, 巻百五=105, 第23巻=23. Convertilo
+  sempre in volume_number: senza volume il prezzo non si trova;
+- l'OBI (fascetta di carta sulla parte bassa) contiene pubblicità: film,
+  artbook ("COLOR WALK"), date di uscita, campagne. NON è il titolo né la
+  serie, e non trasforma il volume in un libro speciale; indica solo che
+  l'OBI è presente (has_obi=true);
 - estrai solo dati visibili o ragionevolmente certi;
 - non inventare ISBN, anno, prima stampa, OBI, grading o prezzo;
 - imposta is_sealed=true solo se il volume è chiaramente ancora avvolto nel
@@ -381,6 +389,17 @@ function pendingReminder(pending: string[]): string {
     "Aggiungi ORA ogni pezzo richiesto con prepare_add_manga, uno per chiamata: se lookup_market_price non ha " +
     "trovato vendite compatibili lascia estimated_value null e spiegalo in notes, non scartare il pezzo. " +
     "Salta solo i pezzi già presenti in collezione, dicendolo."
+  );
+}
+
+function uncoveredPhotosReminder(photos: number[]): string {
+  const list = photos.map((n) => `Foto ${n}`).join(", ");
+  return (
+    `${list} non ${photos.length > 1 ? "sono associate" : "è associata"} a nessun pezzo preparato. ` +
+    "Se mostra un altro volume, fai lookup_market_price e aggiungilo ORA con prepare_add_manga (cover_photo con il suo numero; " +
+    "senza vendite compatibili lascia estimated_value null, non scartarlo). " +
+    "Se invece è un altro lato di un pezzo già preparato (retro, dorso, colophon) o una foto di gruppo già gestita, " +
+    "rispondi solo con il testo, senza tool."
   );
 }
 
@@ -525,6 +544,96 @@ async function executeTool(
   return { output: JSON.stringify({ error: `Tool sconosciuto: ${call.name}` }) };
 }
 
+type PhotoPiece = {
+  photos: number[];
+  cover_photo: number | null;
+  series: string;
+  volume_text: string | null;
+  volume_number: number | null;
+  format: "tankobon" | "zashi";
+  has_obi: boolean | null;
+  obi_text: string | null;
+  is_sealed: boolean;
+  graded: boolean;
+  grading_authority: string | null;
+  grading_value: number | null;
+  condition: string;
+};
+
+const photoReadingSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["pieces"],
+  properties: {
+    pieces: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "photos", "cover_photo", "series", "volume_text", "volume_number", "format", "has_obi",
+          "obi_text", "is_sealed", "graded", "grading_authority", "grading_value", "condition",
+        ],
+        properties: {
+          photos: { type: "array", items: { type: "integer" } },
+          cover_photo: { type: ["integer", "null"] },
+          series: { type: "string" },
+          volume_text: { type: ["string", "null"] },
+          volume_number: { type: ["integer", "null"] },
+          format: { type: "string", enum: ["tankobon", "zashi"] },
+          has_obi: { type: ["boolean", "null"] },
+          obi_text: { type: ["string", "null"] },
+          is_sealed: { type: "boolean" },
+          graded: { type: "boolean" },
+          grading_authority: { type: ["string", "null"] },
+          grading_value: { type: ["number", "null"] },
+          condition: { type: "string" },
+        },
+      },
+    },
+  },
+};
+
+const photoReadingInstructions = `Sei un esperto di manga giapponesi. Elenca i pezzi fisici distinti mostrati nelle foto: più foto dello stesso volume (copertina, retro, dorso, colophon, angoli) sono UN pezzo; una foto con più volumi sono più pezzi.
+Per ciascun pezzo:
+- series: il LOGO principale della copertina (o il nome della rivista per gli zashi);
+- volume_text: la scritta del numero di volume COPIATA esattamente come stampata (es. 巻四十, 巻ノ六十, 第23巻, 1), di solito piccola vicino al logo o sul dorso; volume_number: la sua conversione in cifre (四十=40, 六十=60, 百五=105);
+- l'OBI è la fascetta di carta nella parte bassa con pubblicità (film, artbook, date): riporta il testo in obi_text ma NON usarlo mai per serie o volume;
+- is_sealed=true solo se è chiaramente nel cellophane originale termosaldato; una busta protettiva o uno slab non contano;
+- graded/grading_*: solo se è in uno slab con etichetta leggibile;
+- condition: stato fisico osservabile (angoli, dorso, bordi, macchie, ingiallimento) in italiano, breve;
+- cover_photo: numero della foto frontale del pezzo; null se esiste solo in una foto di gruppo.
+Non inventare nulla che non sia visibile.`;
+
+/**
+ * Lettura dedicata delle foto, senza tool: il modello della chat, dovendo
+ * anche cercare prezzi e metadati, tende a leggere male i numeri in kanji e a
+ * scambiare la pubblicità dell'OBI per il titolo. Un passaggio mirato è molto
+ * più affidabile e fornisce l'elenco dei pezzi attesi.
+ */
+async function readPhotos(imageUrls: string[]): Promise<PhotoPiece[] | null> {
+  const content: Array<Record<string, string>> = [{ type: "input_text", text: "Leggi le foto." }];
+  imageUrls.forEach((url, index) => {
+    content.push({ type: "input_text", text: `Foto ${index + 1}:` });
+    content.push({ type: "input_image", image_url: url, detail: "high" });
+  });
+  try {
+    const response = await createResponse({
+      model: process.env.OPENAI_CHAT_MODEL || "gpt-5-mini",
+      instructions: photoReadingInstructions,
+      reasoning: { effort: "low" },
+      max_output_tokens: 8000,
+      input: [{ role: "user", content }],
+      text: { format: { type: "json_schema", name: "photo_reading", strict: true, schema: photoReadingSchema } },
+    });
+    const parsed = JSON.parse(outputText(response)) as { pieces?: PhotoPiece[] };
+    return Array.isArray(parsed.pieces) && parsed.pieces.length > 0 ? parsed.pieces : null;
+  } catch {
+    // In caso di errore la chat prosegue analizzando le foto direttamente.
+    return null;
+  }
+}
+
 export async function runCollectionChat({
   message,
   imageUrls,
@@ -565,9 +674,20 @@ export async function runCollectionChat({
   ];
   // Ogni foto è preceduta da un'etichetta: il modello la usa per indicare in
   // cover_photo quale immagine è la copertina di ciascun pezzo.
+  const photoPieces = imageUrls.length > 0 ? await readPhotos(imageUrls) : null;
+  if (photoPieces) {
+    content.push({
+      type: "input_text",
+      text:
+        "\n\nLETTURA DELLE FOTO (passaggio di visione dedicato: usala come fonte primaria per serie, " +
+        "volume_number, OBI, sealed, grading, stato e cover_photo; un elemento = un pezzo):\n" +
+        JSON.stringify(photoPieces),
+    });
+  }
   imageUrls.forEach((url, index) => {
     content.push({ type: "input_text", text: `Foto ${index + 1}:` });
-    content.push({ type: "input_image", image_url: url, detail: "auto" });
+    // Con la lettura già fatta le foto servono solo come riscontro visivo.
+    content.push({ type: "input_image", image_url: url, detail: photoPieces ? "low" : "high" });
   });
   if (imageUrls.length === 0 && actionImageUrls.length > 0) {
     content.push({
@@ -611,23 +731,86 @@ export async function runCollectionChat({
   const evaluated = new Map<string, string>();
   const pieceKey = (series: unknown, volume: unknown) =>
     `${String(series ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "")}|${volume ?? ""}`;
+  if (requiresAdd && photoPieces) {
+    for (const piece of photoPieces) {
+      evaluated.set(
+        pieceKey(piece.series, piece.volume_number),
+        `${piece.series}${piece.volume_number != null ? ` vol. ${piece.volume_number}` : ""}`
+      );
+    }
+  }
+  const normalizeSeries = (series: unknown) => String(series ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
   const pendingPieces = () => {
-    const added = new Set(
-      actions
-        .filter((action) => action.type === "add")
-        .map((action) => pieceKey(action.payload.series, action.payload.volume_number ?? action.payload.issue_number))
-    );
-    return [...evaluated].filter(([key]) => !added.has(key)).map(([, label]) => label);
+    const added = actions
+      .filter((action) => action.type === "add")
+      .map((action) => ({
+        series: normalizeSeries(action.payload.series),
+        volume: String(action.payload.volume_number ?? action.payload.issue_number ?? ""),
+      }));
+    // Confronto tollerante: "One Piece" coincide con "ONE PIECE (ed. giapponese)".
+    return [...evaluated]
+      .filter(([key]) => {
+        const [series, volume] = key.split("|");
+        return !added.some(
+          (other) =>
+            other.volume === volume &&
+            (!series || !other.series || other.series.includes(series) || series.includes(other.series))
+        );
+      })
+      .map(([, label]) => label);
   };
   let reminders = 0;
+  // Con più foto e una richiesta di aggiunta, ogni foto deve finire in un
+  // pezzo (come copertina) o essere dichiarata come lato di un pezzo già
+  // preparato: si chiede una sola verifica esplicita al modello.
+  let photoCheckDone = !requiresAdd || imageUrls.length < 2 || photoPieces !== null;
+  const uncoveredPhotos = () => {
+    const used = new Set(actions.map((action) => ("image_url" in action.payload ? action.payload.image_url : null)).filter(Boolean));
+    return imageUrls.map((url, index) => (used.has(url) ? null : index + 1)).filter((n): n is number => n !== null);
+  };
+  const pushAction = (action: ChatAction) => {
+    if (action.type === "add") {
+      const key = pieceKey(action.payload.series, action.payload.volume_number ?? action.payload.issue_number);
+      const existing = actions.findIndex(
+        (other) =>
+          other.type === "add" &&
+          pieceKey(other.payload.series, other.payload.volume_number ?? other.payload.issue_number) === key
+      );
+      // Il modello a volte ripropone lo stesso pezzo con dati arricchiti:
+      // si tiene l'ultima versione invece di creare un duplicato.
+      if (existing >= 0) {
+        actions[existing] = action;
+        return;
+      }
+    }
+    actions.push(action);
+  };
 
-  for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
+  // Ogni pezzo in più richiede in genere un giro per la valutazione e uno
+  // per l'aggiunta: senza margine gli ultimi pezzi venivano persi.
+  const maxRounds = MAX_TOOL_ROUNDS + Math.min(photoPieces?.length ?? imageUrls.length, MAX_CHAT_IMAGES);
+  for (let round = 0; round < maxRounds; round += 1) {
     if (response.output.some((item) => item.type === "web_search_call")) {
       usedWebSearch = true;
     }
     const calls = response.output.filter((item): item is FunctionCall => item.type === "function_call");
     const pendingNow = requiresAdd && actions.length > 0 ? pendingPieces() : [];
-    if (calls.length === 0 && pendingNow.length > 0 && reminders < 2 && round < MAX_TOOL_ROUNDS - 1) {
+    const uncoveredNow = !photoCheckDone && actions.length > 0 && pendingNow.length === 0 ? uncoveredPhotos() : [];
+    if (calls.length === 0 && uncoveredNow.length > 0 && round < maxRounds - 1) {
+      photoCheckDone = true;
+      response = await createResponse({
+        model: process.env.OPENAI_CHAT_MODEL || "gpt-5-mini",
+        instructions,
+        tools,
+        reasoning: { effort: "low" },
+        max_output_tokens: 6000,
+        max_tool_calls: 6,
+        previous_response_id: response.id,
+        input: [{ role: "user", content: uncoveredPhotosReminder(uncoveredNow) }],
+      });
+      continue;
+    }
+    if (calls.length === 0 && pendingNow.length > 0 && reminders < 2 && round < maxRounds - 1) {
       reminders += 1;
       response = await createResponse({
         model: process.env.OPENAI_CHAT_MODEL || "gpt-5-mini",
@@ -695,7 +878,7 @@ export async function runCollectionChat({
             executed += result.sideEffects ?? 0;
             if (call.name === "lookup_market_price") {
               usedPriceLookup = true;
-              if (requiresAdd && typeof args.series === "string" && args.series.trim()) {
+              if (requiresAdd && !photoPieces && typeof args.series === "string" && args.series.trim()) {
                 const volume = typeof args.volume === "number" ? args.volume : null;
                 evaluated.set(
                   pieceKey(args.series, volume),
@@ -711,7 +894,7 @@ export async function runCollectionChat({
                 // Output non interpretabile: si mantiene lo stato corrente.
               }
             }
-            if (result.action) actions.push(result.action);
+            if (result.action) pushAction(result.action);
           }
         } catch (cause) {
           result = {
@@ -730,7 +913,10 @@ export async function runCollectionChat({
     );
 
     const pendingAfter = requiresAdd ? pendingPieces() : [];
-    if (actions.length > 0 && (pendingAfter.length === 0 || reminders >= 2)) {
+    const uncoveredAfter =
+      !photoCheckDone && actions.length > 0 && pendingAfter.length === 0 ? uncoveredPhotos() : [];
+    if (uncoveredAfter.length > 0) photoCheckDone = true;
+    if (actions.length > 0 && uncoveredAfter.length === 0 && (pendingAfter.length === 0 || reminders >= 2)) {
       const names = actions.map((action) =>
         action.type === "add"
           ? `${action.payload.series}${action.payload.volume_number != null ? ` vol. ${action.payload.volume_number}` : ""}`
@@ -758,7 +944,11 @@ export async function runCollectionChat({
       max_tool_calls: 6,
       include: ["web_search_call.action.sources"],
       previous_response_id: response.id,
-      input: remind ? [...outputs, { role: "user", content: pendingReminder(pendingAfter) }] : outputs,
+      input: remind
+        ? [...outputs, { role: "user", content: pendingReminder(pendingAfter) }]
+        : uncoveredAfter.length > 0
+          ? [...outputs, { role: "user", content: uncoveredPhotosReminder(uncoveredAfter) }]
+          : outputs,
     });
   }
 

@@ -5,6 +5,9 @@ import { MAX_CHAT_IMAGES, runCollectionChat } from "@/lib/ai/openai";
 import { executeChatAction } from "@/lib/ai/actions";
 import { chatEntityContextSchema } from "@/lib/ai/schemas";
 
+// Più foto e più pezzi richiedono diversi giri con il modello.
+export const maxDuration = 300;
+
 const requestSchema = z.object({
   message: z.string().trim().min(1).max(4000),
   imageUrls: z.array(z.string().url()).max(MAX_CHAT_IMAGES).optional(),

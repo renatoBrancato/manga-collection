@@ -143,6 +143,17 @@ Le immagini non transitano come base64 nel JSON della chat: il browser le
 riduce e le invia in multipart a `/api/chat/image`; il server le salva nel
 bucket `covers` e passa a OpenAI il relativo URL pubblico.
 
+Prima della conversazione vera e propria le foto passano da una **lettura
+dedicata** (una chiamata senza tool con output JSON strutturato) che elenca i
+pezzi distinti: serie dal logo, numero di volume copiato com'è stampato e
+convertito (巻四十 → 40), testo dell'OBI tenuto separato dal titolo, sealed,
+grading, stato e foto di copertina. Il modello della chat la riceve come
+fonte primaria e le foto gli arrivano a bassa risoluzione solo come
+riscontro; i pezzi letti diventano l'elenco di quelli attesi, e il turno non
+si chiude finché non sono stati tutti proposti (con giri extra in base al
+numero di pezzi). Se la lettura fallisce, la chat analizza le foto in alta
+risoluzione come prima.
+
 Con più foto, ciascuna è preceduta dall'etichetta "Foto N" e Koma distingue
 due casi: **stesso pezzo** da più lati (copertina, retro, colophon, angoli) →
 un solo pezzo, con stato, prima stampa, OBI e sealed dedotti da tutte le
