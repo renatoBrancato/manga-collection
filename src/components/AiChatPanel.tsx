@@ -3,20 +3,28 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { prepareCoverBlob } from "@/lib/image-client";
-import type { ChatAction, ChatEntityContext } from "@/lib/ai/schemas";
+import { MAX_CHAT_IMAGES, type ChatAction, type ChatEntityContext } from "@/lib/ai/schemas";
 
 type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   text: string;
+  imageUrls?: string[];
+  /** Formato della versione precedente (una sola foto), ancora presente nelle chat salvate. */
   imageUrl?: string;
   actions?: ChatAction[];
 };
 
+type Attachment = { id: string; file: File; preview: string };
+
+function messageImages(message: ChatMessage): string[] {
+  return message.imageUrls ?? (message.imageUrl ? [message.imageUrl] : []);
+}
+
 const WELCOME_MESSAGE: ChatMessage = {
   id: "welcome",
   role: "assistant",
-  text: "Ciao, sono Koma — il tuo assistente da collezione. Posso riconoscere un manga da una foto, cercare tra i tuoi volumi e preparare aggiunte o modifiche.",
+  text: "Ciao, sono Koma — il tuo assistente da collezione. Mandami una o più foto: posso riconoscere più manga insieme, oppure valutare lo stato di un volume da copertina, retro e colophon. Cerco anche tra i tuoi volumi e aggiorno i dati.",
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -76,9 +84,9 @@ export default function AiChatPanel({ userId }: { userId: string }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [contextImageUrl, setContextImageUrl] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const attachmentsRef = useRef<Attachment[]>([]);
+  const [contextImageUrls, setContextImageUrls] = useState<string[]>([]);
   const [recentContext, setRecentContext] = useState<ChatEntityContext | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -96,6 +104,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
         if (saved) {
           const state = JSON.parse(saved) as {
             messages?: ChatMessage[];
+            contextImageUrls?: string[];
             contextImageUrl?: string | null;
             completedActions?: string[];
             recentContext?: ChatEntityContext | null;
@@ -104,7 +113,9 @@ export default function AiChatPanel({ userId }: { userId: string }) {
           if (Array.isArray(state.messages) && state.messages.length > 0) {
             setMessages(state.messages);
           }
-          setContextImageUrl(state.contextImageUrl ?? null);
+          setContextImageUrls(
+            state.contextImageUrls ?? (state.contextImageUrl ? [state.contextImageUrl] : [])
+          );
           setCompletedActions(new Set(state.completedActions ?? []));
           setRecentContext(state.recentContext ?? null);
           setOpen(state.open ?? false);
@@ -126,13 +137,13 @@ export default function AiChatPanel({ userId }: { userId: string }) {
       storageKey,
       JSON.stringify({
         messages,
-        contextImageUrl,
+        contextImageUrls,
         completedActions: [...completedActions],
         recentContext,
         open,
       })
     );
-  }, [completedActions, contextImageUrl, hydrated, messages, open, recentContext, storageKey]);
+  }, [completedActions, contextImageUrls, hydrated, messages, open, recentContext, storageKey]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -158,33 +169,66 @@ export default function AiChatPanel({ userId }: { userId: string }) {
   }, [open]);
 
   useEffect(() => {
-    return () => {
-      if (imagePreview) URL.revokeObjectURL(imagePreview);
-    };
-  }, [imagePreview]);
+    attachmentsRef.current = attachments;
+  }, [attachments]);
 
-  function selectImage(file: File | null) {
-    if (imagePreview) URL.revokeObjectURL(imagePreview);
-    if (!file && fileInputRef.current) fileInputRef.current.value = "";
-    setImageFile(file);
-    setImagePreview(file ? URL.createObjectURL(file) : null);
+  // Le anteprime locali (blob:) vanno liberate anche se il pannello viene
+  // smontato con allegati ancora in attesa di invio.
+  useEffect(() => {
+    return () => attachmentsRef.current.forEach((attachment) => URL.revokeObjectURL(attachment.preview));
+  }, []);
+
+  function addImages(files: Iterable<File>) {
+    const images = [...files].filter((file) => file.type.startsWith("image/"));
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (images.length === 0) return;
+
+    const free = MAX_CHAT_IMAGES - attachments.length;
+    const accepted = images.slice(0, Math.max(0, free));
+    setError(
+      images.length > accepted.length
+        ? `Puoi allegare al massimo ${MAX_CHAT_IMAGES} foto per messaggio.`
+        : null
+    );
+    if (accepted.length === 0) return;
+
+    setAttachments((current) => [
+      ...current,
+      ...accepted.map((file) => ({ id: crypto.randomUUID(), file, preview: URL.createObjectURL(file) })),
+    ]);
+  }
+
+  function removeAttachment(id: string) {
+    setAttachments((current) => {
+      const removed = current.find((attachment) => attachment.id === id);
+      if (removed) URL.revokeObjectURL(removed.preview);
+      return current.filter((attachment) => attachment.id !== id);
+    });
     setError(null);
+  }
+
+  // Svuota il compositore senza revocare le anteprime: il messaggio appena
+  // inviato continua a mostrarle finché non arrivano gli URL definitivi.
+  function detachAttachments() {
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    setAttachments([]);
   }
 
   function resetChat() {
     setMessages([WELCOME_MESSAGE]);
-    setContextImageUrl(null);
+    setContextImageUrls([]);
     setCompletedActions(new Set());
     setRecentContext(null);
     setError(null);
-    selectImage(null);
+    attachments.forEach((attachment) => URL.revokeObjectURL(attachment.preview));
+    detachAttachments();
     localStorage.removeItem(storageKey);
   }
 
   async function uploadImage(file: File): Promise<string> {
     const blob = await prepareCoverBlob(file);
     const form = new FormData();
-    form.append("image", blob, "cover.jpg");
+    form.append("image", blob, "photo.jpg");
 
     const response = await fetch("/api/chat/image", { method: "POST", body: form });
     const body = await response.json().catch(() => ({}));
@@ -194,39 +238,46 @@ export default function AiChatPanel({ userId }: { userId: string }) {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if ((!input.trim() && !imageFile) || loading) return;
+    if ((!input.trim() && attachments.length === 0) || loading) return;
 
-    const text = input.trim() || "Analizza questa immagine e dimmi cosa riconosci.";
-    const localPreview = imagePreview ?? undefined;
+    const sending = attachments;
+    const text =
+      input.trim() ||
+      (sending.length > 1
+        ? "Analizza queste foto e dimmi cosa riconosci."
+        : "Analizza questa immagine e dimmi cosa riconosci.");
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
       role: "user",
       text,
-      imageUrl: localPreview,
+      imageUrls: sending.length > 0 ? sending.map((attachment) => attachment.preview) : undefined,
     };
 
     setMessages((current) => [...current, userMessage]);
     setInput("");
     setLoading(true);
     setError(null);
+    detachAttachments();
 
     try {
-      const imageUrl = imageFile ? await uploadImage(imageFile) : null;
-      if (imageUrl) {
-        setContextImageUrl(imageUrl);
+      // Upload in parallelo, mantenendo l'ordine: la numerazione "Foto N"
+      // vista dal modello deve corrispondere a quella mostrata all'utente.
+      const imageUrls = await Promise.all(sending.map((attachment) => uploadImage(attachment.file)));
+      sending.forEach((attachment) => URL.revokeObjectURL(attachment.preview));
+      if (imageUrls.length > 0) {
+        setContextImageUrls(imageUrls);
         setMessages((current) =>
-          current.map((message) => (message.id === userMessage.id ? { ...message, imageUrl } : message))
+          current.map((message) => (message.id === userMessage.id ? { ...message, imageUrls } : message))
         );
       }
-      selectImage(null);
 
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
-          imageUrl,
-          contextImageUrl: imageUrl ?? contextImageUrl,
+          imageUrls,
+          contextImageUrls: imageUrls.length > 0 ? imageUrls : contextImageUrls,
           history: messages
             .filter((message) => message.id !== "welcome")
             .slice(-6)
@@ -239,7 +290,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
 
       if ("recentContext" in body) setRecentContext(body.recentContext ?? null);
       if (body.executed > 0) {
-        setContextImageUrl(null);
+        setContextImageUrls([]);
         router.refresh();
       }
       setMessages((current) => [
@@ -253,11 +304,13 @@ export default function AiChatPanel({ userId }: { userId: string }) {
       ]);
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "Errore durante la richiesta";
-      if (imageFile) {
+      if (sending.length > 0) {
+        // Upload fallito: le anteprime blob: non sopravvivono al ricaricamento
+        // e non devono finire nella chat salvata.
+        sending.forEach((attachment) => URL.revokeObjectURL(attachment.preview));
         setMessages((current) =>
-          current.map((message) => (message.id === userMessage.id ? { ...message, imageUrl: undefined } : message))
+          current.map((message) => (message.id === userMessage.id ? { ...message, imageUrls: undefined } : message))
         );
-        selectImage(null);
       }
       setError(message);
       setMessages((current) => [
@@ -285,8 +338,8 @@ export default function AiChatPanel({ userId }: { userId: string }) {
 
       setCompletedActions((current) => new Set(current).add(actionKey));
       const imageUrl = actionImageUrl(action);
-      if (imageUrl && imageUrl === contextImageUrl) {
-        setContextImageUrl(null);
+      if (imageUrl && contextImageUrls.includes(imageUrl)) {
+        setContextImageUrls((current) => current.filter((url) => url !== imageUrl));
       }
       setMessages((current) => [
         ...current,
@@ -381,13 +434,30 @@ export default function AiChatPanel({ userId }: { userId: string }) {
                     : "rounded-2xl rounded-bl-md border border-white/8 bg-slate-900 px-4 py-3 text-sm leading-relaxed text-slate-200 shadow-lg shadow-black/10"
                 }
               >
-                {message.imageUrl && (
+                {messageImages(message).length === 1 && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={message.imageUrl}
+                    src={messageImages(message)[0]}
                     alt="Allegato"
                     className="mb-3 max-h-64 w-full rounded-xl object-cover ring-1 ring-white/10"
                   />
+                )}
+                {messageImages(message).length > 1 && (
+                  <div className="mb-3 grid grid-cols-3 gap-1.5">
+                    {messageImages(message).map((url, index) => (
+                      <div key={`${url}-${index}`} className="relative">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={url}
+                          alt={`Foto ${index + 1}`}
+                          className="aspect-[3/4] w-full rounded-lg object-cover ring-1 ring-white/10"
+                        />
+                        <span className="absolute left-1 top-1 rounded bg-black/60 px-1 text-[10px] font-semibold text-white">
+                          {index + 1}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 )}
                 <p className="whitespace-pre-wrap">{message.text}</p>
               </div>
@@ -468,26 +538,67 @@ export default function AiChatPanel({ userId }: { userId: string }) {
         onSubmit={handleSubmit}
         className="shrink-0 border-t border-white/10 bg-slate-950/90 p-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] sm:p-4 sm:pb-4"
       >
-        {!imagePreview && contextImageUrl && (
+        {attachments.length === 0 && contextImageUrls.length > 0 && (
           <div className="mb-3 flex items-center gap-3 rounded-xl border border-white/8 bg-slate-900 p-2.5">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={contextImageUrl} alt="Immagine in contesto" className="h-12 w-9 rounded object-cover" />
+            <div className="flex -space-x-3">
+              {contextImageUrls.slice(0, 3).map((url) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={url}
+                  src={url}
+                  alt="Immagine in contesto"
+                  className="h-12 w-9 rounded object-cover ring-2 ring-slate-900"
+                />
+              ))}
+            </div>
             <span className="min-w-0 flex-1 text-xs text-slate-400">
-              Immagine mantenuta per i messaggi successivi
+              {contextImageUrls.length > 1
+                ? `${contextImageUrls.length} foto mantenute per i messaggi successivi`
+                : "Immagine mantenuta per i messaggi successivi"}
             </span>
-            <button type="button" onClick={() => setContextImageUrl(null)} className="text-xs text-red-400">
+            <button type="button" onClick={() => setContextImageUrls([])} className="text-xs text-red-400">
               Rimuovi
             </button>
           </div>
         )}
-        {imagePreview && (
-          <div className="mb-3 flex items-center gap-3 rounded-xl border border-white/8 bg-slate-900 p-2.5">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={imagePreview} alt="Anteprima allegato" className="h-14 w-10 rounded object-cover" />
-            <span className="min-w-0 flex-1 truncate text-xs text-slate-400">{imageFile?.name}</span>
-            <button type="button" onClick={() => selectImage(null)} className="text-xs text-red-400">
-              Rimuovi
-            </button>
+        {attachments.length > 0 && (
+          <div className="mb-3 rounded-xl border border-white/8 bg-slate-900 p-2.5">
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {attachments.map((attachment, index) => (
+                <div key={attachment.id} className="relative shrink-0">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={attachment.preview}
+                    alt={`Foto ${index + 1}`}
+                    className="h-16 w-12 rounded-lg object-cover ring-1 ring-white/10"
+                  />
+                  <span className="absolute bottom-0.5 left-0.5 rounded bg-black/60 px-1 text-[10px] font-semibold text-white">
+                    {index + 1}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(attachment.id)}
+                    aria-label={`Rimuovi foto ${index + 1}`}
+                    className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-950 text-[10px] text-slate-300 ring-1 ring-white/20 transition hover:text-red-400"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              {attachments.length < MAX_CHAT_IMAGES && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  aria-label="Aggiungi altre foto"
+                  className="flex h-16 w-12 shrink-0 items-center justify-center rounded-lg border border-dashed border-slate-600 text-lg text-slate-500 transition hover:border-indigo-400 hover:text-indigo-300"
+                >
+                  +
+                </button>
+              )}
+            </div>
+            <p className="mt-1.5 text-[10px] text-slate-500">
+              {attachments.length}/{MAX_CHAT_IMAGES} foto · stesso manga da più lati o manga diversi
+            </p>
           </div>
         )}
         <div className="flex items-end gap-2 rounded-2xl border border-slate-700 bg-slate-900 p-2 transition focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/15">
@@ -495,20 +606,28 @@ export default function AiChatPanel({ userId }: { userId: string }) {
             ref={fileInputRef}
             type="file"
             accept="image/*"
+            multiple
             className="hidden"
-            onChange={(event) => selectImage(event.target.files?.[0] ?? null)}
+            onChange={(event) => addImages(event.target.files ?? [])}
           />
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg text-slate-400 transition hover:bg-slate-800 hover:text-white"
-            title="Allega immagine"
+            title={`Allega foto (max ${MAX_CHAT_IMAGES})`}
           >
             📎
           </button>
           <textarea
             value={input}
             onChange={(event) => setInput(event.target.value)}
+            onPaste={(event) => {
+              const pasted = [...event.clipboardData.files].filter((file) => file.type.startsWith("image/"));
+              if (pasted.length > 0) {
+                event.preventDefault();
+                addImages(pasted);
+              }
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
@@ -516,12 +635,12 @@ export default function AiChatPanel({ userId }: { userId: string }) {
               }
             }}
             rows={2}
-            placeholder="Scrivi a Koma o allega una foto..."
+            placeholder="Scrivi a Koma o allega delle foto..."
             className="min-h-10 flex-1 resize-none bg-transparent px-1 py-2 text-base text-slate-100 outline-none placeholder:text-slate-600 sm:text-sm"
           />
           <button
             type="submit"
-            disabled={loading || (!input.trim() && !imageFile)}
+            disabled={loading || (!input.trim() && attachments.length === 0)}
             className="flex h-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-4 text-sm font-semibold text-white shadow-md transition hover:from-indigo-400 hover:to-violet-400 disabled:opacity-40"
           >
             ↑

@@ -2,6 +2,7 @@ import type { MangaItem } from "@/lib/types";
 import { lookupMarketPrice } from "@/lib/pricing/westblue";
 import { revalueUserCollection } from "@/lib/pricing/revalue";
 import {
+  MAX_CHAT_IMAGES,
   mangaMutationSchema,
   mangaPatchSchema,
   type ChatAction,
@@ -9,7 +10,14 @@ import {
 } from "@/lib/ai/schemas";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
-const MAX_TOOL_ROUNDS = 5;
+const MAX_TOOL_ROUNDS = 6;
+export { MAX_CHAT_IMAGES };
+
+const coverPhotoProperty = {
+  type: ["integer", "null"],
+  description:
+    "Numero (1, 2, ...) della foto allegata da usare come copertina di QUESTO pezzo. Scegli la foto frontale del volume; null se nessuna foto è una copertina adatta (es. solo retro, colophon, dettagli o una foto di gruppo con più volumi).",
+};
 
 type FunctionCall = {
   type: "function_call";
@@ -147,10 +155,10 @@ const functionTools = [
     type: "function",
     name: "prepare_add_manga",
     description:
-      "Completa e invia i dati di un manga che l'utente ha chiesto esplicitamente di aggiungere. Prima usa search_collection per evitare duplicati e web_search per metadati e valutazione.",
+      "Completa e invia i dati di UN manga che l'utente ha chiesto esplicitamente di aggiungere. Se le foto mostrano più manga diversi, chiamalo una volta per ciascuno (anche in parallelo). Prima usa search_collection per evitare duplicati e lookup_market_price per il valore.",
     parameters: {
       type: "object",
-      properties: itemProperties,
+      properties: { ...itemProperties, cover_photo: coverPhotoProperty },
       required: ["series", "format", "currency"],
       additionalProperties: false,
     },
@@ -166,10 +174,10 @@ const functionTools = [
       properties: {
         id: { type: "string", description: "UUID dell'elemento esistente" },
         ...patchProperties,
-        use_attached_image: {
-          type: "boolean",
+        cover_photo: {
+          ...coverPhotoProperty,
           description:
-            "true solo se la foto allegata deve diventare la copertina; false per foto di colophon, dettagli o slab che non devono sostituire la cover",
+            "Numero della foto allegata da usare come NUOVA copertina, solo se è una foto frontale o l'utente chiede di sostituire l'immagine; null per foto di colophon, retro, dettagli o slab che servono solo all'analisi.",
         },
       },
       required: ["id"],
@@ -254,7 +262,20 @@ RICERCA WEB (solo metadati)
 - dopo le ricerche chiama sempre il tool di aggiunta/aggiornamento: non
   terminare con una semplice spiegazione testuale.
 
-Quando ricevi una foto:
+Quando ricevi una o più foto:
+- le foto sono numerate ("Foto 1", "Foto 2", ...) nell'ordine di invio;
+- capisci prima se ritraggono lo STESSO pezzo da angolazioni diverse
+  (copertina, retro, dorso, colophon, angoli, slab) oppure pezzi DIVERSI;
+- stesso pezzo: combina tutte le foto per una valutazione unica. Deduci lo
+  stato osservando angoli, dorso, retro e pagine; la prima stampa dal
+  colophon; OBI e cellophane da qualunque foto li mostri. Crea un solo pezzo;
+- pezzi diversi (es. "aggiungi questi manga"): crea un pezzo per ciascuno,
+  chiamando prepare_add_manga una volta per volume. Più foto dello stesso
+  volume vanno comunque unite in un unico pezzo;
+- una singola foto con più volumi insieme: aggiungi ogni volume
+  riconoscibile, con cover_photo=null perché la foto di gruppo non è la
+  copertina di nessuno di essi;
+- in cover_photo indica il numero della foto frontale di quel pezzo;
 - analizza copertina, dorso, colophon ed eventuale slab;
 - estrai solo dati visibili o ragionevolmente certi;
 - non inventare ISBN, anno, prima stampa, OBI, grading o prezzo;
@@ -266,10 +287,9 @@ Quando ricevi una foto:
   chiama prepare_add_manga;
 - se chiede di aggiornare un pezzo, usa prima search_collection e poi
   prepare_update_manga;
-- per un'aggiunta, la foto allegata viene usata come copertina;
-- per un aggiornamento imposta use_attached_image=true solo se la foto è una
-  copertina o l'utente chiede esplicitamente di sostituire l'immagine. Usa
-  false per colophon, dettagli interni o slab che servono solo all'analisi.
+- per un aggiornamento indica cover_photo solo se una foto è una copertina o
+  l'utente chiede esplicitamente di sostituire l'immagine. Usa null per
+  colophon, retro, dettagli interni o slab che servono solo all'analisi.
 
 Chiedi una precisazione solo se non puoi identificare l'edizione dopo aver
 analizzato la foto e cercato sul web, oppure se trovi più edizioni plausibili.
@@ -355,10 +375,25 @@ function compactItem(item: MangaItem) {
   };
 }
 
+function pendingReminder(pending: string[]): string {
+  return (
+    `Hai valutato anche ${pending.join(", ")} ma non l'hai ancora aggiunto. ` +
+    "Aggiungi ORA ogni pezzo richiesto con prepare_add_manga, uno per chiamata: se lookup_market_price non ha " +
+    "trovato vendite compatibili lascia estimated_value null e spiegalo in notes, non scartare il pezzo. " +
+    "Salta solo i pezzi già presenti in collezione, dicendolo."
+  );
+}
+
+/** Converte il numero di foto (1-based) scelto dal modello nell'URL corrispondente. */
+function pickPhoto(imageUrls: string[], coverPhoto: unknown): string | null {
+  if (typeof coverPhoto !== "number" || !Number.isInteger(coverPhoto)) return null;
+  return imageUrls[coverPhoto - 1] ?? null;
+}
+
 async function executeTool(
   call: FunctionCall,
   items: MangaItem[],
-  imageUrl: string | null,
+  imageUrls: string[],
   userId: string
 ): Promise<{ output: string; action?: ChatAction; sideEffects?: number }> {
   const args = JSON.parse(call.arguments || "{}") as Record<string, unknown>;
@@ -449,21 +484,28 @@ async function executeTool(
   }
 
   if (call.name === "prepare_add_manga") {
+    const { cover_photo: coverPhoto, ...addArgs } = args;
+    // Con una sola foto è quasi sempre la copertina (comportamento storico);
+    // con più foto la copertina va indicata esplicitamente, altrimenti un
+    // retro o un colophon diventerebbero la cover.
+    const cover =
+      coverPhoto === undefined && imageUrls.length === 1 ? imageUrls[0] : pickPhoto(imageUrls, coverPhoto);
     const payload = mangaMutationSchema.parse({
-      ...args,
+      ...addArgs,
       currency: "EUR",
-      image_url: imageUrl ?? args.image_url ?? null,
+      image_url: cover ?? addArgs.image_url ?? null,
     });
     const action: ChatAction = { type: "add", payload };
     return { output: JSON.stringify({ prepared: true, action }), action };
   }
 
   if (call.name === "prepare_update_manga") {
-    const { use_attached_image: useAttachedImage, ...patchArgs } = args;
+    const { cover_photo: coverPhoto, use_attached_image: legacyUseImage, ...patchArgs } = args;
+    const cover = legacyUseImage === true ? imageUrls[0] ?? null : pickPhoto(imageUrls, coverPhoto);
     const payload = mangaPatchSchema.parse({
       ...patchArgs,
       ...(patchArgs.estimated_value !== undefined ? { currency: "EUR" } : {}),
-      ...(imageUrl && useAttachedImage === true ? { image_url: imageUrl } : {}),
+      ...(cover ? { image_url: cover } : {}),
     });
     const action: ChatAction = { type: "update", payload };
     return { output: JSON.stringify({ prepared: true, action }), action };
@@ -485,16 +527,18 @@ async function executeTool(
 
 export async function runCollectionChat({
   message,
-  imageUrl,
-  actionImageUrl,
+  imageUrls,
+  actionImageUrls,
   history,
   recentContext,
   items,
   userId,
 }: {
   message: string;
-  imageUrl: string | null;
-  actionImageUrl: string | null;
+  /** Foto allegate a questo messaggio, inviate al modello per l'analisi. */
+  imageUrls: string[];
+  /** Foto disponibili come copertina: quelle nuove o, in loro assenza, quelle del turno precedente. */
+  actionImageUrls: string[];
   history: Array<{ role: "user" | "assistant"; text: string }>;
   recentContext: ChatEntityContext | null;
   items: MangaItem[];
@@ -519,8 +563,19 @@ export async function runCollectionChat({
   const content: Array<Record<string, string>> = [
     { type: "input_text", text: `${message}${contextText}` },
   ];
-  if (imageUrl) {
-    content.push({ type: "input_image", image_url: imageUrl, detail: "auto" });
+  // Ogni foto è preceduta da un'etichetta: il modello la usa per indicare in
+  // cover_photo quale immagine è la copertina di ciascun pezzo.
+  imageUrls.forEach((url, index) => {
+    content.push({ type: "input_text", text: `Foto ${index + 1}:` });
+    content.push({ type: "input_image", image_url: url, detail: "auto" });
+  });
+  if (imageUrls.length === 0 && actionImageUrls.length > 0) {
+    content.push({
+      type: "input_text",
+      text: `\n(Ci sono ${actionImageUrls.length} foto del messaggio precedente ancora disponibili come copertina: Foto 1${
+        actionImageUrls.length > 1 ? `-${actionImageUrls.length}` : ""
+      }.)`,
+    });
   }
 
   const compactHistory = history.slice(-6).map((entry) => ({
@@ -532,7 +587,9 @@ export async function runCollectionChat({
     instructions,
     tools,
     reasoning: { effort: "low" },
-    max_output_tokens: 3000,
+    // Più foto significano spesso più pezzi da creare nello stesso turno,
+    // ciascuno con la propria chiamata: serve più spazio per gli argomenti.
+    max_output_tokens: imageUrls.length > 1 ? 6000 : 3000,
     max_tool_calls: 6,
     include: ["web_search_call.action.sources"],
     input: [...compactHistory, { role: "user", content }],
@@ -546,11 +603,44 @@ export async function runCollectionChat({
   let usedPriceLookup = false;
   let priceLookupFoundValue = false;
 
+  // Con più pezzi da aggiungere, il modello tende a fermarsi al primo (per
+  // esempio scartando in silenzio quello senza vendite compatibili). Si
+  // tiene traccia dei pezzi valutati e, finché qualcuno non è stato
+  // aggiunto, il turno continua invece di chiudersi alla prima proposta.
+  const requiresAdd = /\b(aggiung|inserisc|salva|registra)\w*/i.test(message);
+  const evaluated = new Map<string, string>();
+  const pieceKey = (series: unknown, volume: unknown) =>
+    `${String(series ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "")}|${volume ?? ""}`;
+  const pendingPieces = () => {
+    const added = new Set(
+      actions
+        .filter((action) => action.type === "add")
+        .map((action) => pieceKey(action.payload.series, action.payload.volume_number ?? action.payload.issue_number))
+    );
+    return [...evaluated].filter(([key]) => !added.has(key)).map(([, label]) => label);
+  };
+  let reminders = 0;
+
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
     if (response.output.some((item) => item.type === "web_search_call")) {
       usedWebSearch = true;
     }
     const calls = response.output.filter((item): item is FunctionCall => item.type === "function_call");
+    const pendingNow = requiresAdd && actions.length > 0 ? pendingPieces() : [];
+    if (calls.length === 0 && pendingNow.length > 0 && reminders < 2 && round < MAX_TOOL_ROUNDS - 1) {
+      reminders += 1;
+      response = await createResponse({
+        model: process.env.OPENAI_CHAT_MODEL || "gpt-5-mini",
+        instructions,
+        tools,
+        reasoning: { effort: "low" },
+        max_output_tokens: 6000,
+        max_tool_calls: 6,
+        previous_response_id: response.id,
+        input: [{ role: "user", content: pendingReminder(pendingNow) }],
+      });
+      continue;
+    }
     if (calls.length === 0) {
       return {
         responseId: response.id,
@@ -601,10 +691,19 @@ export async function runCollectionChat({
               }),
             };
           } else {
-            result = await executeTool(call, items, actionImageUrl, userId);
+            result = await executeTool(call, items, actionImageUrls, userId);
             executed += result.sideEffects ?? 0;
             if (call.name === "lookup_market_price") {
               usedPriceLookup = true;
+              if (requiresAdd && typeof args.series === "string" && args.series.trim()) {
+                const volume = typeof args.volume === "number" ? args.volume : null;
+                evaluated.set(
+                  pieceKey(args.series, volume),
+                  `${args.series}${volume != null ? ` vol. ${volume}` : ""}${
+                    args.graded === true && typeof args.grade === "number" ? ` (graded ${args.grade})` : ""
+                  }`
+                );
+              }
               try {
                 const parsed = JSON.parse(result.output) as { suggested_value_eur?: number | null };
                 if (typeof parsed.suggested_value_eur === "number") priceLookupFoundValue = true;
@@ -630,7 +729,8 @@ export async function runCollectionChat({
       })
     );
 
-    if (actions.length > 0) {
+    const pendingAfter = requiresAdd ? pendingPieces() : [];
+    if (actions.length > 0 && (pendingAfter.length === 0 || reminders >= 2)) {
       const names = actions.map((action) =>
         action.type === "add"
           ? `${action.payload.series}${action.payload.volume_number != null ? ` vol. ${action.payload.volume_number}` : ""}`
@@ -647,16 +747,18 @@ export async function runCollectionChat({
       };
     }
 
+    const remind = actions.length > 0 && pendingAfter.length > 0;
+    if (remind) reminders += 1;
     response = await createResponse({
       model: process.env.OPENAI_CHAT_MODEL || "gpt-5-mini",
       instructions,
       tools,
       reasoning: { effort: "low" },
-      max_output_tokens: 3000,
+      max_output_tokens: imageUrls.length > 1 ? 6000 : 3000,
       max_tool_calls: 6,
       include: ["web_search_call.action.sources"],
       previous_response_id: response.id,
-      input: outputs,
+      input: remind ? [...outputs, { role: "user", content: pendingReminder(pendingAfter) }] : outputs,
     });
   }
 

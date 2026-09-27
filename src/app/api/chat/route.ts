@@ -1,12 +1,15 @@
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { listItems } from "@/lib/items";
-import { runCollectionChat } from "@/lib/ai/openai";
+import { MAX_CHAT_IMAGES, runCollectionChat } from "@/lib/ai/openai";
 import { executeChatAction } from "@/lib/ai/actions";
 import { chatEntityContextSchema } from "@/lib/ai/schemas";
 
 const requestSchema = z.object({
   message: z.string().trim().min(1).max(4000),
+  imageUrls: z.array(z.string().url()).max(MAX_CHAT_IMAGES).optional(),
+  contextImageUrls: z.array(z.string().url()).max(MAX_CHAT_IMAGES).optional(),
+  // Campi singoli della versione precedente, accettati per compatibilità.
   imageUrl: z.string().url().nullable().optional(),
   contextImageUrl: z.string().url().nullable().optional(),
   history: z
@@ -32,10 +35,12 @@ export async function POST(request: Request) {
   try {
     const body = requestSchema.parse(await request.json());
     const items = await listItems(user.id);
+    const imageUrls = body.imageUrls ?? (body.imageUrl ? [body.imageUrl] : []);
+    const contextImageUrls = body.contextImageUrls ?? (body.contextImageUrl ? [body.contextImageUrl] : []);
     const result = await runCollectionChat({
       message: body.message,
-      imageUrl: body.imageUrl ?? null,
-      actionImageUrl: body.imageUrl ?? body.contextImageUrl ?? null,
+      imageUrls,
+      actionImageUrls: imageUrls.length > 0 ? imageUrls : contextImageUrls,
       history: body.history ?? [],
       recentContext: body.recentContext ?? null,
       items,

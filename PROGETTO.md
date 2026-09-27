@@ -16,8 +16,9 @@ valore economico. L'utente può aggiungere i volumi:
    estrae i metadati e li invia all'app tramite un **server MCP** esposto
    dall'app stessa (vedi sezione 4).
 3. **Dalla chat AI integrata nella dashboard**, allegando facoltativamente
-   una foto. La foto viene compressa nel browser, caricata su Supabase
-   Storage e passata a OpenAI come URL per l'analisi vision.
+   fino a 6 foto per messaggio (anche incollandole). Le foto vengono
+   compresse nel browser, caricate su Supabase Storage e passate a OpenAI
+   come URL per l'analisi vision.
 
 Deploy pubblico: **https://manga-collection-seven.vercel.app**
 Repo: `https://github.com/renatoBrancato/manga-collection`
@@ -140,10 +141,22 @@ o `updateItem()`.
 
 Le immagini non transitano come base64 nel JSON della chat: il browser le
 riduce e le invia in multipart a `/api/chat/image`; il server le salva nel
-bucket `covers` e passa a OpenAI il relativo URL pubblico. Lo stesso URL
-viene inserito automaticamente nella proposta di aggiunta o aggiornamento.
+bucket `covers` e passa a OpenAI il relativo URL pubblico.
 
-La conversazione di Koma, le operazioni e l'immagine in
+Con più foto, ciascuna è preceduta dall'etichetta "Foto N" e Koma distingue
+due casi: **stesso pezzo** da più lati (copertina, retro, colophon, angoli) →
+un solo pezzo, con stato, prima stampa, OBI e sealed dedotti da tutte le
+foto; **pezzi diversi** → un pezzo per volume. Per ogni pezzo il modello
+indica in `cover_photo` quale foto è la copertina; con una sola foto si usa
+quella, con più foto solo quella indicata (retro e colophon non diventano
+mai cover, e una foto di gruppo non è la copertina di nessun volume).
+
+Il turno non si chiude alla prima proposta se restano pezzi già valutati con
+`lookup_market_price` ma non ancora aggiunti: il modello riceve un promemoria
+(al massimo due) e aggiunge anche quelli senza vendite compatibili, con
+valore vuoto. Con un solo pezzo il comportamento e il costo non cambiano.
+
+La conversazione di Koma, le operazioni e le foto in
 contesto vengono conservate nel `localStorage` con una chiave separata per
 utente, quindi un refresh non azzera la chat. Il pulsante **Nuova chat**
 permette di cancellarla volontariamente. Un comando esplicito come

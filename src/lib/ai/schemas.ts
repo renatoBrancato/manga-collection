@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** Numero massimo di foto allegabili a un singolo messaggio di Koma. */
+export const MAX_CHAT_IMAGES = 6;
+
 const nullableText = z.string().trim().nullable().optional();
 const nullableNumber = z.number().nullable().optional();
 const nullableBoolean = z.boolean().nullable().optional();
