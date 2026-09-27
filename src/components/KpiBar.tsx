@@ -12,7 +12,9 @@ export default function KpiBar({ items }: { items: MangaItem[] }) {
   const zashi = items.filter((i) => i.format === "zashi").length;
   const graded = items.filter((i) => i.grading_authority).length;
   const firstPrints = items.filter((i) => i.is_first_print === true).length;
-  const avgValue = total > 0 ? totalValue / total : 0;
+  const withObi = items.filter((i) => i.has_obi === true).length;
+  const withoutObi = items.filter((i) => i.has_obi === false).length;
+  const obiUnknown = total - withObi - withoutObi;
 
   const topSeriesEntry = Object.entries(
     items.reduce<Record<string, number>>((acc, i) => {
@@ -29,7 +31,12 @@ export default function KpiBar({ items }: { items: MangaItem[] }) {
     { label: "Tankobon / Zashi", value: `${tankobon} / ${zashi}`, icon: "📖" },
     { label: "Pezzi gradati", value: graded.toString(), icon: "🏅" },
     { label: "Prima stampa", value: firstPrints.toString(), icon: "🆕" },
-    { label: "Valore medio/volume", value: formatCurrency(avgValue), icon: "📈" },
+    {
+      label: "Con OBI / Senza",
+      value: `${withObi} / ${withoutObi}`,
+      icon: "🎗️",
+      hint: obiUnknown > 0 ? `${obiUnknown} con OBI non specificato` : undefined,
+    },
     {
       label: "Serie più numerosa",
       value: topSeriesEntry ? `${topSeriesEntry[0]} (${topSeriesEntry[1]})` : "-",
@@ -45,7 +52,7 @@ export default function KpiBar({ items }: { items: MangaItem[] }) {
           className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-3 text-center"
         >
           <div className="text-xl">{kpi.icon}</div>
-          <div className="mt-1 truncate text-sm font-semibold text-slate-100" title={kpi.value}>
+          <div className="mt-1 truncate text-sm font-semibold text-slate-100" title={kpi.hint ?? kpi.value}>
             {kpi.value}
           </div>
           <div className="text-[11px] uppercase tracking-wide text-slate-500">{kpi.label}</div>

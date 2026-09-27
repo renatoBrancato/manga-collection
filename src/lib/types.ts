@@ -14,6 +14,8 @@ export interface MangaItem {
   isbn: string | null;
   is_first_print: boolean | null;
   has_obi: boolean | null;
+  /** Ancora sigillato nel cellophane originale. */
+  is_sealed: boolean;
   printing_notes: string | null;
   grading_authority: GradingAuthority | null;
   grading_value: number | null;
@@ -47,6 +49,7 @@ export interface IncomingItemPayload {
   isbn?: string | null;
   is_first_print?: boolean | null;
   has_obi?: boolean | null;
+  is_sealed?: boolean | null;
   printing_notes?: string | null;
   grading_authority?: GradingAuthority | null;
   grading_value?: number | null;

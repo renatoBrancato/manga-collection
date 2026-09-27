@@ -28,6 +28,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
   const [formatFilter, setFormatFilter] = useState<string>("all");
   const [gradingFilter, setGradingFilter] = useState("all");
   const [obiFilter, setObiFilter] = useState("all");
+  const [sealedFilter, setSealedFilter] = useState("all");
   const [printingFilter, setPrintingFilter] = useState("all");
   const [languageFilter, setLanguageFilter] = useState("all");
   const [valueFilter, setValueFilter] = useState("all");
@@ -53,6 +54,8 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
       if (gradingFilter === "raw" && item.grading_authority) return false;
       if (obiFilter === "yes" && item.has_obi !== true) return false;
       if (obiFilter === "no" && item.has_obi !== false) return false;
+      if (sealedFilter === "yes" && !item.is_sealed) return false;
+      if (sealedFilter === "no" && item.is_sealed) return false;
       if (printingFilter === "first" && item.is_first_print !== true) return false;
       if (printingFilter === "reprint" && item.is_first_print !== false) return false;
       if (languageFilter !== "all" && item.language !== languageFilter) return false;
@@ -78,6 +81,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
     formatFilter,
     gradingFilter,
     obiFilter,
+    sealedFilter,
     printingFilter,
     languageFilter,
     valueFilter,
@@ -91,6 +95,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
     formatFilter,
     gradingFilter,
     obiFilter,
+    sealedFilter,
     printingFilter,
     languageFilter,
     valueFilter,
@@ -103,6 +108,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
     setFormatFilter("all");
     setGradingFilter("all");
     setObiFilter("all");
+    setSealedFilter("all");
     setPrintingFilter("all");
     setLanguageFilter("all");
     setValueFilter("all");
@@ -212,6 +218,11 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
               <option value="yes">Con OBI</option>
               <option value="no">Senza OBI</option>
             </select>
+            <select value={sealedFilter} onChange={(e) => setSealedFilter(e.target.value)} className="input w-full">
+              <option value="all">Sigillati e aperti</option>
+              <option value="yes">Solo sigillati</option>
+              <option value="no">Solo non sigillati</option>
+            </select>
             <select
               value={printingFilter}
               onChange={(e) => setPrintingFilter(e.target.value)}
@@ -292,11 +303,21 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
                   <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px]">
                     {FORMAT_LABELS[item.format] ?? item.format}
                   </span>
-                  {item.has_obi === true && (
-                    <span title="Fascetta OBI presente" className="text-sm">
-                      🎗️
-                    </span>
-                  )}
+                  <span className="flex items-center gap-1">
+                    {item.is_sealed && (
+                      <span
+                        title="Sigillato nel cellophane originale"
+                        className="rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-300"
+                      >
+                        Sealed
+                      </span>
+                    )}
+                    {item.has_obi === true && (
+                      <span title="Fascetta OBI presente" className="text-sm">
+                        🎗️
+                      </span>
+                    )}
+                  </span>
                 </div>
                 <p className="line-clamp-2 font-medium text-slate-100" title={item.series ?? item.title}>
                   {item.series ?? item.title}

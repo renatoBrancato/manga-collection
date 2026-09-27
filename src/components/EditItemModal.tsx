@@ -41,6 +41,7 @@ export default function EditItemModal({ item, onClose }: { item: MangaItem; onCl
         isbn: String(form.get("isbn") || "") || null,
         is_first_print: isFirstPrintRaw === "" ? null : isFirstPrintRaw === "true",
         has_obi: hasObiRaw === "" ? null : hasObiRaw === "true",
+        is_sealed: form.get("is_sealed") === "true",
         printing_notes: String(form.get("printing_notes") || "") || null,
         grading_authority: graded ? String(form.get("grading_authority") || "") || null : null,
         grading_value: graded && form.get("grading_value") ? Number(form.get("grading_value")) : null,
@@ -173,6 +174,10 @@ export default function EditItemModal({ item, onClose }: { item: MangaItem; onCl
             <option value="">Fascetta OBI? (non specificato)</option>
             <option value="true">Sì, presente</option>
             <option value="false">No, assente</option>
+          </select>
+          <select name="is_sealed" defaultValue={String(item.is_sealed ?? false)} className="input">
+            <option value="false">Non sigillato</option>
+            <option value="true">Sigillato (cellophane originale)</option>
           </select>
           <input
             name="printing_notes"

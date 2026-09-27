@@ -99,6 +99,8 @@ completo e `supabase/migrations/` per lo schema SQL):
 | `volume_number` | solo per tankobon |
 | `issue_number` | solo per zashi (es. numero/anno rivista) |
 | `is_first_print` + `printing_notes` | prima stampa (dal colophon 奥付/初版) o ristampa |
+| `has_obi` | fascetta OBI presente/assente; `null` se non determinabile (in quel caso la valutazione non filtra per OBI) |
+| `is_sealed` | ancora nel cellophane originale; sempre `true`/`false` (default `false`) |
 | `grading_authority` | `CGC` / `CBCS` / `BGS` / `altro`, se il volume è gradato (slab) |
 | `grading_value` | voto di grading, se presente |
 | `condition_estimate` | stima testuale della condizione, se **non** gradato |
@@ -120,12 +122,11 @@ Il valore è già convertito in EUR. Se non esistono vendite compatibili
 `suggested_value_eur` è `null` e il valore resta vuoto, con il motivo nelle
 note: non vengono usati fallback silenziosi o filtri più larghi.
 
-Il tool `revalue_manga_collection` prepara i criteri di ricerca per tutti gli
-elementi (o solo quelli senza prezzo); ChatGPT deve poi visitare West Blue e
-chiamare `update_manga_item` per ogni valore verificato. Il prompt MCP
-`rivaluta_collezione` avvia lo stesso workflow nei client che supportano i
-prompt/comandi. Non è scraping automatico lato backend: la navigazione e la
-lettura del tracker sono eseguite dal client AI.
+Il tool `revalue_manga_collection` rivaluta e salva tutti gli elementi (o
+solo quelli senza prezzo) direttamente sul server, in un'unica chiamata; il
+prompt MCP `rivaluta_collezione` lo avvia nei client che supportano i
+prompt/comandi. La stessa rivalutazione gira ogni giorno via cron (vedi
+"Rivalutazione automatica").
 
 ### Chat AI nella dashboard
 

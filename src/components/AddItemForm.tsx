@@ -39,6 +39,7 @@ export default function AddItemForm({ userId }: { userId: string }) {
       isbn: String(form.get("isbn") || "") || null,
       is_first_print: isFirstPrintRaw === "" ? null : isFirstPrintRaw === "true",
       has_obi: hasObiRaw === "" ? null : hasObiRaw === "true",
+      is_sealed: form.get("is_sealed") === "true",
       printing_notes: String(form.get("printing_notes") || "") || null,
       grading_authority: graded ? String(form.get("grading_authority") || "") || null : null,
       grading_value: graded && form.get("grading_value") ? Number(form.get("grading_value")) : null,
@@ -137,6 +138,10 @@ export default function AddItemForm({ userId }: { userId: string }) {
         <option value="">Fascetta OBI? (non specificato)</option>
         <option value="true">Sì, presente</option>
         <option value="false">No, assente</option>
+      </select>
+      <select name="is_sealed" defaultValue="false" className="input">
+        <option value="false">Non sigillato</option>
+        <option value="true">Sigillato (cellophane originale)</option>
       </select>
       <input name="printing_notes" placeholder="Note stampa (es. 3a ristampa)" className="input" />
 

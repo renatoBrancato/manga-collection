@@ -29,6 +29,7 @@ create table if not exists public.items (
   isbn text,
   is_first_print boolean,      -- vero se prima stampa/初版 (rilevata dal colophon)
   has_obi boolean,             -- vero se presente la fascetta OBI originale
+  is_sealed boolean not null default false, -- ancora nel cellophane originale
   printing_notes text,         -- es. "3a ristampa", note libere sulla stampa/edizione
   grading_authority text check (grading_authority is null or grading_authority in ('CGC', 'CBCS', 'BGS', 'altro')),
   grading_value numeric,       -- es. 9.8, se gradato da un ente

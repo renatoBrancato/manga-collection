@@ -46,6 +46,10 @@ const itemProperties = {
   isbn: { type: ["string", "null"] },
   is_first_print: { type: ["boolean", "null"] },
   has_obi: { type: ["boolean", "null"] },
+  is_sealed: {
+    type: ["boolean", "null"],
+    description: "true solo se il pezzo è ancora nel cellophane originale di fabbrica",
+  },
   printing_notes: { type: ["string", "null"] },
   grading_authority: { type: ["string", "null"], enum: ["CGC", "CBCS", "BGS", "altro", null] },
   grading_value: { type: ["number", "null"] },
@@ -66,6 +70,7 @@ const patchProperties = {
   isbn: { type: "string" },
   is_first_print: { type: "boolean" },
   has_obi: { type: "boolean" },
+  is_sealed: { type: "boolean" },
   printing_notes: { type: "string" },
   grading_authority: { type: "string", enum: ["CGC", "CBCS", "BGS", "altro"] },
   grading_value: { type: "number" },
@@ -253,6 +258,9 @@ Quando ricevi una foto:
 - analizza copertina, dorso, colophon ed eventuale slab;
 - estrai solo dati visibili o ragionevolmente certi;
 - non inventare ISBN, anno, prima stampa, OBI, grading o prezzo;
+- imposta is_sealed=true solo se il volume è chiaramente ancora avvolto nel
+  cellophane originale (riflessi della pellicola, bordi termosaldati); in
+  ogni altro caso false. Un pezzo in slab gradato non è "sealed";
 - usa tankobon per volumi rilegati e zashi per riviste;
 - se l'utente chiede di aggiungere il pezzo e serie/numero sono identificabili,
   chiama prepare_add_manga;
@@ -338,6 +346,7 @@ function compactItem(item: MangaItem) {
     isbn: item.isbn,
     is_first_print: item.is_first_print,
     has_obi: item.has_obi,
+    is_sealed: item.is_sealed,
     grading_authority: item.grading_authority,
     grading_value: item.grading_value,
     condition_estimate: item.condition_estimate,
