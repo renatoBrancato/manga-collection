@@ -352,7 +352,9 @@ export default function AiChatPanel({ userId }: { userId: string }) {
               ? "Elemento aggiunto alla collezione."
               : action.type === "update"
                 ? "Elemento aggiornato correttamente."
-                : "Elemento rimosso dalla collezione.") +
+                : action.payload.forget_history
+                  ? "Elemento rimosso dalla collezione e dallo storico del valore."
+                  : "Elemento rimosso dalla collezione.") +
             (body.imageWarning ? ` Attenzione: ${body.imageWarning}` : ""),
         },
       ]);

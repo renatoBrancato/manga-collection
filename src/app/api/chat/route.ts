@@ -70,6 +70,9 @@ export async function POST(request: Request) {
         const number = item?.volume_number ?? item?.issue_number;
         const verb = action.type === "add" ? "Aggiunto" : action.type === "update" ? "Aggiornato" : "Rimosso";
         const label = `${name}${number != null ? ` #${number}` : ""}`;
+        if (action.type === "delete") {
+          return `Rimosso ${label}${action.payload.forget_history ? " — anche dallo storico del valore" : " — lo storico del valore resta"}`;
+        }
 
         if (result.intent.valuation && action.type === "update") {
           if (action.payload.estimated_value != null) {

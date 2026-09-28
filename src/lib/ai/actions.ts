@@ -9,7 +9,9 @@ export async function executeChatAction(userId: string, action: ChatAction) {
   }
 
   if (action.type === "delete") {
-    const { deleted, error } = await deleteItem(userId, action.payload.id);
+    const { deleted, error } = await deleteItem(userId, action.payload.id, {
+      forgetHistory: action.payload.forget_history === true,
+    });
     if (error) return { error };
     return { item: deleted };
   }

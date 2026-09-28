@@ -207,8 +207,13 @@ const functionTools = [
         series: { type: "string" },
         volume_number: { type: ["number", "null"] },
         issue_number: { type: ["string", "null"] },
+        forget_history: {
+          type: "boolean",
+          description:
+            "true = cancella anche lo storico del valore, come se il pezzo non fosse mai stato aggiunto; false = lo storico dei giorni passati resta",
+        },
       },
-      required: ["id", "series"],
+      required: ["id", "series", "forget_history"],
       additionalProperties: false,
     },
     strict: false,
@@ -233,6 +238,13 @@ CONTESTO CONVERSAZIONALE
   "aggiungigli" si riferiscono a quell'elemento;
 - usa direttamente il suo id senza chiedere nuovamente serie o numero;
 - per una rimozione chiama delete_manga. Non serve ricerca web per eliminare;
+- rimozione e storico: se l'utente dice che l'aveva aggiunto per errore o che
+  non vuole lasciare traccia, forget_history = true; se l'ha venduto, perso o
+  regalato, forget_history = false (il valore passato resta nei grafici). Se
+  non è chiaro, prima di chiamare delete_manga chiedi in una frase se
+  cancellare anche la traccia del valore nello storico (es. "L'hai venduto o
+  l'avevi aggiunto per errore? Nel secondo caso cancello anche lo storico del
+  valore."), senza citare nomi di parametri;
 - se non esiste un elemento corrente e il riferimento è ambiguo, usa
   search_collection o chiedi chiarimenti.
 
@@ -559,6 +571,7 @@ async function executeTool(
       series: String(args.series),
       volume_number: typeof args.volume_number === "number" ? args.volume_number : null,
       issue_number: typeof args.issue_number === "string" ? args.issue_number : null,
+      forget_history: args.forget_history === true,
     };
     const action: ChatAction = { type: "delete", payload };
     return { output: JSON.stringify({ prepared: true, action }), action };

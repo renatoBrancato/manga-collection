@@ -152,9 +152,15 @@ export async function updateItem(
   return { updated: data as MangaItem, imageWarning };
 }
 
+/**
+ * Rimuove un pezzo. Con `forgetHistory` cancella anche il suo storico prezzi
+ * (utile se era stato aggiunto per errore): i totali dei giorni passati
+ * tornano come se non fosse mai stato inserito.
+ */
 export async function deleteItem(
   userId: string,
-  id: string
+  id: string,
+  options: { forgetHistory?: boolean } = {}
 ): Promise<{ deleted: MangaItem | null; error?: string }> {
   const admin = createAdminClient();
   const { data, error } = await admin
@@ -167,6 +173,15 @@ export async function deleteItem(
 
   if (error) return { deleted: null, error: error.message };
   if (!data) return { deleted: null, error: "Item not found" };
+
+  if (options.forgetHistory) {
+    const { error: historyError } = await admin
+      .from("price_history")
+      .delete()
+      .eq("item_id", id)
+      .eq("user_id", userId);
+    if (historyError) return { deleted: data as MangaItem, error: historyError.message };
+  }
   return { deleted: data as MangaItem };
 }
 

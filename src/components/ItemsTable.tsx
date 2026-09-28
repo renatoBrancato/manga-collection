@@ -7,6 +7,7 @@ import type { MangaItem } from "@/lib/types";
 import CoverImage from "@/components/CoverImage";
 import EditItemModal from "@/components/EditItemModal";
 import ItemHistoryModal from "@/components/ItemHistoryModal";
+import DeleteItemDialog from "@/components/DeleteItemDialog";
 
 const FORMAT_LABELS: Record<string, string> = {
   tankobon: "Tankobon",
@@ -38,6 +39,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MangaItem | null>(null);
   const [historyItem, setHistoryItem] = useState<MangaItem | null>(null);
+  const [deletingItem, setDeletingItem] = useState<MangaItem | null>(null);
 
   const languages = useMemo(
     () =>
@@ -120,9 +122,14 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
     setValueFilter("all");
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Rimuovere questo elemento dalla collezione?")) return;
-    await supabase.from("items").delete().eq("id", id);
+  async function handleDelete(item: MangaItem, forgetHistory: boolean) {
+    const { data, error } = await supabase.rpc("delete_item", {
+      p_item_id: item.id,
+      p_forget_history: forgetHistory,
+    });
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error("Elemento non trovato");
+    setDeletingItem(null);
     router.refresh();
   }
 
@@ -312,7 +319,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
                     ✎
                   </button>
                   <button
-                    onClick={() => handleDelete(item.id)}
+                    onClick={() => setDeletingItem(item)}
                     className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-950/80 text-slate-300 transition hover:text-red-400"
                     title="Rimuovi"
                   >
@@ -397,6 +404,13 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
       )}
 
       {editingItem && <EditItemModal item={editingItem} onClose={() => setEditingItem(null)} />}
+      {deletingItem && (
+        <DeleteItemDialog
+          item={deletingItem}
+          onCancel={() => setDeletingItem(null)}
+          onConfirm={(forgetHistory) => handleDelete(deletingItem, forgetHistory)}
+        />
+      )}
       {historyItem && <ItemHistoryModal item={historyItem} onClose={() => setHistoryItem(null)} />}
     </div>
   );

@@ -238,6 +238,11 @@ Decisioni prese sul modello dati:
   `item_id`): alla rimozione viene scritta una riga `removed` con valore
   nullo, così il pezzo esce dal totale da quel giorno ma i giorni passati
   restano invariati.
+- Alla rimozione l'utente può scegliere di **cancellare anche lo storico**
+  (pezzo aggiunto per errore): la RPC `delete_item(id, forget_history)` dal
+  browser, o `forget_history` nel tool `delete_manga` di Koma, elimina tutte le
+  righe del pezzo, come se non fosse mai stato inserito. Koma lo deduce dalla
+  frase ("per sbaglio" → sì, "venduto" → no) o lo chiede.
 - Se il cron non trova vendite compatibili registra il valore precedente,
   non un buco.
 - `collection_value_history(user)` calcola il totale giornaliero usando

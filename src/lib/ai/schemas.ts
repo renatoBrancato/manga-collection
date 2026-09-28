@@ -80,6 +80,7 @@ export const chatActionSchema = z.discriminatedUnion("type", [
       series: z.string().trim().min(1),
       volume_number: z.number().nullable().optional(),
       issue_number: z.string().nullable().optional(),
+      forget_history: z.boolean().optional(),
     }),
   }),
 ]);
