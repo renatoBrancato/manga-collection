@@ -170,9 +170,25 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => e.key === "Escape" && setSearch("")}
               placeholder="Serie, editore, ISBN..."
-              className="input w-full pl-9"
+              className="input w-full pl-9 pr-9"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setSearch("");
+                  (e.currentTarget.previousElementSibling as HTMLInputElement | null)?.focus();
+                }}
+                className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-white/10 hover:text-white"
+                aria-label="Cancella ricerca"
+                title="Cancella ricerca"
+              >
+                ✕
+              </button>
+            )}
           </label>
 
           <button
