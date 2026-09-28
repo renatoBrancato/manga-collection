@@ -254,9 +254,14 @@ function buildServer(userId: string) {
         graded: z.boolean().describe("true se il pezzo è in slab gradato, false se RAW"),
         grade: z.number().optional().describe("Voto di grading, es. 8.0"),
         has_obi: z.boolean().optional().describe("true con OBI, false senza; ometti se non noto"),
+        issue_number: z
+          .string()
+          .optional()
+          .describe("Solo zashi: numero della rivista come stampato, es. '36-37'. Con series = nome della rivista in romaji"),
+        year: z.number().int().optional().describe("Solo zashi: anno di uscita del numero, es. 2025"),
       },
     },
-    async ({ series, volume, format, graded, grade, has_obi }) => {
+    async ({ series, volume, format, graded, grade, has_obi, issue_number, year }) => {
       try {
         const result = await lookupMarketPrice({
           series,
@@ -265,6 +270,8 @@ function buildServer(userId: string) {
           graded,
           grade: grade ?? null,
           hasObi: has_obi ?? null,
+          issue: issue_number ?? null,
+          year: year ?? null,
         });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (cause) {

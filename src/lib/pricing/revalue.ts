@@ -112,6 +112,8 @@ async function lookupForItem(item: MangaItem): Promise<PriceLookupResult> {
     graded: Boolean(item.grading_authority),
     grade: item.grading_value,
     hasObi: item.has_obi,
+    issue: item.format === "zashi" ? item.issue_number : null,
+    year: item.format === "zashi" ? item.release_year : null,
   });
 }
 

@@ -130,6 +130,11 @@ const functionTools = [
         graded: { type: "boolean", description: "true se il pezzo è in slab gradato, false se RAW" },
         grade: { type: ["number", "null"], description: "Voto di grading, es. 8.0" },
         has_obi: { type: ["boolean", "null"], description: "true con OBI, false senza, null se ignoto" },
+        issue_number: {
+          type: ["string", "null"],
+          description: "Solo zashi: numero della rivista come stampato, es. '36-37'",
+        },
+        year: { type: ["integer", "null"], description: "Solo zashi: anno di uscita del numero, es. 2025" },
       },
       required: ["series", "graded"],
       additionalProperties: false,
@@ -251,6 +256,11 @@ VALUTAZIONE OBBLIGATORIA
   la ricerca web non riesce a leggerli, quindi concluderesti a torto che il
   dato non esiste;
 - passa serie in inglese, volume, graded (true/false), grade e has_obi;
+- per gli zashi passa format "zashi", series = nome della rivista in romaji
+  ("Weekly Shonen Jump", non 週刊少年ジャンプ), issue_number come stampato
+  ("36-37") e year: senza numero e anno il tracker non trova il numero esatto;
+  se l'anno non è noto e il tracker dice che il numero esiste in più annate,
+  chiedi l'anno all'utente: non prenderlo dai risultati né indovinarlo;
 - per un graded il tool restituisce la riga esatta con stesso volume e voto:
   usa quel prezzo, non una media tra graded diversi;
 - per RAW il tool restituisce la media delle vendite compatibili;
@@ -295,7 +305,10 @@ Quando ricevi una o più foto:
 - imposta is_sealed=true solo se il volume è chiaramente ancora avvolto nel
   cellophane originale (riflessi della pellicola, bordi termosaldati); in
   ogni altro caso false. Un pezzo in slab gradato non è "sealed";
-- usa tankobon per volumi rilegati e zashi per riviste;
+- usa tankobon per volumi rilegati e zashi per riviste; per uno zashi la
+  serie è il nome della rivista in romaji (es. "Weekly Shonen Jump"), con
+  issue_number e release_year. Una rivista è UN pezzo: non aggiungerla due
+  volte con il nome in inglese e in giapponese;
 - se l'utente chiede di aggiungere il pezzo e serie/numero sono identificabili,
   chiama prepare_add_manga;
 - se chiede di aggiornare un pezzo, usa prima search_collection e poi
@@ -473,6 +486,8 @@ async function executeTool(
         graded: args.graded === true,
         grade: typeof args.grade === "number" ? args.grade : null,
         hasObi: typeof args.has_obi === "boolean" ? args.has_obi : null,
+        issue: typeof args.issue_number === "string" ? args.issue_number : null,
+        year: typeof args.year === "number" ? args.year : null,
       });
       return { output: JSON.stringify(result) };
     } catch (cause) {
@@ -558,6 +573,8 @@ type PhotoPiece = {
   series: string;
   volume_text: string | null;
   volume_number: number | null;
+  issue_number: string | null;
+  year: number | null;
   format: "tankobon" | "zashi";
   has_obi: boolean | null;
   obi_text: string | null;
@@ -579,7 +596,7 @@ const photoReadingSchema = {
         type: "object",
         additionalProperties: false,
         required: [
-          "photos", "cover_photo", "series", "volume_text", "volume_number", "format", "has_obi",
+          "photos", "cover_photo", "series", "volume_text", "volume_number", "issue_number", "year", "format", "has_obi",
           "obi_text", "is_sealed", "graded", "grading_authority", "grading_value", "condition",
         ],
         properties: {
@@ -588,6 +605,8 @@ const photoReadingSchema = {
           series: { type: "string" },
           volume_text: { type: ["string", "null"] },
           volume_number: { type: ["integer", "null"] },
+          issue_number: { type: ["string", "null"] },
+          year: { type: ["integer", "null"] },
           format: { type: "string", enum: ["tankobon", "zashi"] },
           has_obi: { type: ["boolean", "null"] },
           obi_text: { type: ["string", "null"] },
@@ -606,6 +625,8 @@ const photoReadingInstructions = `Sei un esperto di manga giapponesi. Elenca i p
 Per ciascun pezzo:
 - series: il LOGO principale della copertina (o il nome della rivista per gli zashi);
 - volume_text: la scritta del numero di volume COPIATA esattamente come stampata (es. 巻四十, 巻ノ六十, 第23巻, 1), di solito piccola vicino al logo o sul dorso; volume_number: la sua conversione in cifre (四十=40, 六十=60, 百五=105);
+- zashi (riviste): series = nome della rivista in romaji/inglese (週刊少年ジャンプ → "Weekly Shonen Jump"); issue_number = numero del fascicolo come stampato (es. "36・37号" → "36-37"); year = anno del fascicolo SOLO se stampato e leggibile in copertina (es. "2025年", data di uscita), altrimenti null: non dedurlo dal contenuto. volume_number null;
+- tankōbon: issue_number e year null;
 - l'OBI è la fascetta di carta nella parte bassa con pubblicità (film, artbook, date): riporta il testo in obi_text ma NON usarlo mai per serie o volume;
 - is_sealed=true solo se è chiaramente nel cellophane originale termosaldato; una busta protettiva o uno slab non contano;
 - graded/grading_*: solo se è in uno slab con etichetta leggibile;
@@ -742,8 +763,10 @@ export async function runCollectionChat({
   if (requiresAdd && photoPieces) {
     for (const piece of photoPieces) {
       evaluated.set(
-        pieceKey(piece.series, piece.volume_number),
-        `${piece.series}${piece.volume_number != null ? ` vol. ${piece.volume_number}` : ""}`
+        pieceKey(piece.series, piece.volume_number ?? piece.issue_number),
+        `${piece.series}${
+          piece.volume_number != null ? ` vol. ${piece.volume_number}` : piece.issue_number ? ` #${piece.issue_number}` : ""
+        }`
       );
     }
   }
@@ -779,10 +802,16 @@ export async function runCollectionChat({
   const pushAction = (action: ChatAction) => {
     if (action.type === "add") {
       const key = pieceKey(action.payload.series, action.payload.volume_number ?? action.payload.issue_number);
+      const number = String(action.payload.volume_number ?? action.payload.issue_number ?? "");
       const existing = actions.findIndex(
         (other) =>
           other.type === "add" &&
-          pieceKey(other.payload.series, other.payload.volume_number ?? other.payload.issue_number) === key
+          (pieceKey(other.payload.series, other.payload.volume_number ?? other.payload.issue_number) === key ||
+            // Stessa copertina e stesso numero: è lo stesso pezzo scritto con
+            // un nome diverso (es. "Weekly Shonen Jump" e "週刊少年ジャンプ").
+            (Boolean(action.payload.image_url) &&
+              other.payload.image_url === action.payload.image_url &&
+              String(other.payload.volume_number ?? other.payload.issue_number ?? "") === number))
       );
       // Il modello a volte ripropone lo stesso pezzo con dati arricchiti:
       // si tiene l'ultima versione invece di creare un duplicato.

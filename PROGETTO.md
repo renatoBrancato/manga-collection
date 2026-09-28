@@ -200,6 +200,13 @@ eseguita almeno una ricerca web. Le ricerche sono limitate per contenere
 latenza e costi; se West Blue non ha comparabili compatibili il valore resta
 vuoto e il motivo viene salvato nelle note, senza inventare un prezzo.
 
+Zashi: il dataset `sold_zasshi` è indicizzato per contenuto, quindi la
+ricerca filtra su tutte le righe per rivista (alias giapponesi inclusi, es.
+週刊少年ジャンプ → Weekly Shonen Jump), numero del fascicolo e anno. Se lo
+stesso numero esiste in più annate e l'anno manca, Koma lo chiede invece di
+mescolare le vendite. Per un RAW senza vendite RAW le graded sono citate
+solo come riferimento.
+
 Decisioni prese sul modello dati:
 - Rimosso il vecchio campo `status` (posseduto/in lettura/completato/da
   acquistare) — non richiesto/utile per un catalogo di proprietà.
