@@ -246,7 +246,7 @@ function buildServer(userId: string) {
     {
       title: "Cerca il valore di mercato su West Blue",
       description:
-        `Interroga direttamente il Manga Price Tracker di West Blue (${PRICE_TRACKER_URL}) e restituisce le vendite compatibili con il pezzo, con il valore suggerito già convertito in EUR. Usa SEMPRE questo tool per i prezzi: la pagina carica i dati via JavaScript, quindi la navigazione web non riesce a leggerli. Per i graded restituisce la riga esatta con stesso volume e voto; per i RAW la media delle vendite compatibili.`,
+        `Interroga direttamente il Manga Price Tracker di West Blue (${PRICE_TRACKER_URL}) e restituisce le vendite compatibili con il pezzo, con il valore suggerito già convertito in EUR. Usa SEMPRE questo tool per i prezzi: la pagina carica i dati via JavaScript, quindi la navigazione web non riesce a leggerli. Per i graded restituisce la riga esatta con stesso volume e voto; per i RAW la media delle vendite compatibili. Per gli zashi RAW che il tracker non segue ripiega sulla mediana degli annunci eBay attivi (provider "ebay"): dillo all'utente.`,
       inputSchema: {
         series: z.string().describe("Nome della serie in inglese, es. 'Attack on Titan'"),
         volume: z.number().optional().describe("Numero del volume"),

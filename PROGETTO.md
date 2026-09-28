@@ -207,6 +207,14 @@ stesso numero esiste in più annate e l'anno manca, Koma lo chiede invece di
 mescolare le vendite. Per un RAW senza vendite RAW le graded sono citate
 solo come riferimento.
 
+West Blue però registra vendite RAW solo dei numeri "chiave" (nessuna RAW
+per le annate 2019, 2021-2026). Per questi zashi `lookupMarketPrice` ripiega
+su `src/lib/pricing/ebay.ts`: Browse API ufficiale eBay, annunci attivi
+filtrati per rivista, anno e numero nel titolo (esclusi graded, lotti,
+ristampe), prezzi fuori scala scartati, mediana con almeno 3 annunci. Sono
+prezzi richiesti e non vendite: base `ebay_mediana_annunci`, fonte `ebay`.
+Serve `EBAY_CLIENT_ID`/`EBAY_CLIENT_SECRET`; senza, il fallback è spento.
+
 Decisioni prese sul modello dati:
 - Rimosso il vecchio campo `status` (posseduto/in lettura/completato/da
   acquistare) — non richiesto/utile per un catalogo di proprietà.

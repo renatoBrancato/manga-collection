@@ -120,7 +120,7 @@ const functionTools = [
     type: "function",
     name: "lookup_market_price",
     description:
-      "Legge direttamente il Manga Price Tracker di West Blue e restituisce le vendite compatibili con il pezzo, con il valore suggerito già convertito in EUR. È la fonte OBBLIGATORIA per qualsiasi prezzo: usalo sempre invece della ricerca web, che non riesce a leggere le tabelle del tracker.",
+      "Legge direttamente il Manga Price Tracker di West Blue e restituisce le vendite compatibili con il pezzo, con il valore suggerito già convertito in EUR. Per gli zashi RAW assenti dal tracker ripiega sugli annunci eBay (provider ebay). È la fonte OBBLIGATORIA per qualsiasi prezzo: usalo sempre invece della ricerca web, che non riesce a leggere le tabelle del tracker.",
     parameters: {
       type: "object",
       properties: {
@@ -278,7 +278,9 @@ VALUTAZIONE OBBLIGATORIA
 - per RAW il tool restituisce la media delle vendite compatibili;
 - il campo suggested_value_eur è già convertito in EUR: copialo in
   estimated_value e imposta currency EUR;
-- riporta in notes la base usata (suggested_basis) e la fonte West Blue;
+- riporta in notes la base usata (suggested_basis) e la fonte: West Blue,
+  oppure "annunci eBay" se provider = "ebay" (succede per zashi RAW che West
+  Blue non traccia: è una mediana di prezzi richiesti, dillo all'utente);
 - solo se suggested_value_eur è null lascia estimated_value vuoto e scrivi in
   notes che non esistono vendite compatibili.
 

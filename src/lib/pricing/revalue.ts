@@ -164,7 +164,7 @@ export async function revalueUserCollection(
   const capturedOn = capturedAt.slice(0, 10);
   const historyRows: Array<Record<string, unknown>> = [];
   const outcomes: RevalueOutcome[] = [];
-  const updates: Array<{ id: string; value: number; basis: string }> = [];
+  const updates: Array<{ id: string; value: number; basis: string; source: string }> = [];
 
   for (const entry of lookups) {
     const { item } = entry;
@@ -198,7 +198,7 @@ export async function revalueUserCollection(
       currency: "EUR",
       basis: value == null ? (previous == null ? "none" : "invariato_nessuna_vendita") : result.suggested_basis,
       match_count: result.match_count,
-      source: SOURCE,
+      source: value == null ? SOURCE : (result.provider ?? SOURCE),
       captured_at: capturedAt,
       captured_on: capturedOn,
     });
@@ -218,7 +218,7 @@ export async function revalueUserCollection(
     }
 
     const changed = previous == null || Math.abs(previous - value) >= 0.01;
-    if (changed) updates.push({ id: item.id, value, basis: result.suggested_basis });
+    if (changed) updates.push({ id: item.id, value, basis: result.suggested_basis, source: result.provider ?? SOURCE });
 
     outcomes.push({
       item_id: item.id,
@@ -253,7 +253,7 @@ export async function revalueUserCollection(
         currency: "EUR",
         valued_at: capturedAt,
         valuation_basis: update.basis,
-        valuation_source: SOURCE,
+        valuation_source: update.source,
       })
       .eq("id", update.id)
       .eq("user_id", userId);

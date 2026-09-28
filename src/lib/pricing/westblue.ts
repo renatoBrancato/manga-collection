@@ -8,6 +8,8 @@
  * regole di valutazione, in modo deterministico e senza costi di token.
  */
 
+import { lookupEbayZasshi } from "@/lib/pricing/ebay";
+
 const CDN = "https://cdn.shopify.com/s/files/1/0722/8532/3421/files/";
 const INDEX_FILE = "manga_tracker_index.json";
 export const PRICE_TRACKER_URL = "https://westblue.shop/pages/manga-price-tracker";
@@ -124,18 +126,20 @@ function normalize(value: string): string {
 }
 
 // Nomi giapponesi delle riviste più comuni, che normalize() ridurrebbe a "".
+// Le voci più specifiche vanno prima: "ジャンプ" da solo catturerebbe anche
+// 月刊少年ジャンプ o ヤングジャンプ.
 const MAGAZINE_ALIASES: Array<[RegExp, string]> = [
-  [/週刊少年ジャンプ|少年ジャンプ|ジャンプ/, "weekly shonen jump"],
-  [/週刊少年マガジン|少年マガジン/, "weekly shonen magazine"],
-  [/週刊少年サンデー|少年サンデー/, "weekly shonen sunday"],
   [/月刊少年ジャンプ/, "monthly shonen jump"],
   [/ジャンプスクエア|ジャンプSQ/i, "jump square"],
   [/赤マルジャンプ/, "akamaru jump"],
   [/ヤングジャンプ/, "weekly young jump"],
+  [/週刊少年ジャンプ|少年ジャンプ|ジャンプ/, "weekly shonen jump"],
+  [/週刊少年マガジン|少年マガジン/, "weekly shonen magazine"],
+  [/週刊少年サンデー|少年サンデー/, "weekly shonen sunday"],
   [/コロコロ/, "corocoro comic"],
 ];
 
-function magazineKey(value: string): string {
+export function magazineKey(value: string): string {
   const alias = MAGAZINE_ALIASES.find(([pattern]) => pattern.test(value));
   if (alias) return alias[1];
   return normalize(value).replace(/^shonen jump$/, "weekly shonen jump");
@@ -235,6 +239,8 @@ export type PriceLookupInput = {
 
 export type PriceLookupResult = {
   source: string;
+  /** Chi ha fornito il prezzo: il tracker West Blue o gli annunci eBay. */
+  provider?: "westblue" | "ebay";
   tracker_updated_at?: string;
   series_query: string;
   series_matched: string | null;
@@ -270,7 +276,10 @@ export type PriceLookupResult = {
  * la media delle vendite compatibili.
  */
 export async function lookupMarketPrice(input: PriceLookupInput): Promise<PriceLookupResult> {
-  if (input.format === "zashi") return lookupZasshiPrice(input);
+  if (input.format === "zashi") {
+    const tracker = await lookupZasshiPrice(input);
+    return tracker.suggested_value_eur == null ? withEbayFallback(input, tracker) : tracker;
+  }
   const dataset = input.graded ? "sold_graded" : "sold_raw";
   const rate = await getUsdToEurRate();
   const index = await getIndex();
@@ -492,5 +501,45 @@ async function lookupZasshiPrice(input: PriceLookupInput): Promise<PriceLookupRe
     suggested_value_eur: round2(median(prices) * rate),
     suggested_basis: "media_vendite_compatibili",
     note: `RAW: mediana di ${prices.length} vendite di ${label} convertita in EUR.`,
+  };
+}
+
+/**
+ * West Blue segue solo i numeri "chiave": per le riviste recenti non ha
+ * vendite RAW. In quel caso si ripiega sugli annunci attivi eBay, a patto di
+ * conoscere numero e anno (senza, gli annunci mescolerebbero annate diverse).
+ */
+async function withEbayFallback(input: PriceLookupInput, tracker: PriceLookupResult): Promise<PriceLookupResult> {
+  const issue = parseIssue(input.issue);
+  const year = input.year ?? issue.year;
+  if (input.graded || issue.numbers.length === 0 || year == null) return tracker;
+
+  const ebay = await lookupEbayZasshi({
+    magazine: input.series,
+    issueNumbers: issue.numbers,
+    year,
+    usdToEur: tracker.usd_eur_rate,
+  });
+  if (!ebay.configured) return tracker;
+  if (ebay.value_eur == null) {
+    return { ...tracker, note: `${tracker.note} eBay: ${ebay.note}` };
+  }
+  return {
+    ...tracker,
+    provider: "ebay",
+    source: ebay.search_url,
+    series_matched: tracker.series_matched ?? input.series,
+    matched_rows: ebay.listings.slice(0, 10).map((listing) => ({
+      title: listing.title,
+      volume: null,
+      grade: null,
+      obi: null,
+      price_usd: listing.price_usd,
+      sold_date: null,
+    })),
+    match_count: ebay.listings.length,
+    suggested_value_eur: ebay.value_eur,
+    suggested_basis: "ebay_mediana_annunci",
+    note: `${ebay.note} West Blue: nessuna vendita RAW di questo numero.`,
   };
 }

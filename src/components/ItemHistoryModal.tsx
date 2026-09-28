@@ -17,6 +17,7 @@ type TrackerLink = { series: string | null; url: string; preselected: boolean };
 
 const SOURCE_LABELS: Record<string, string> = {
   westblue: "West Blue",
+  ebay: "annunci eBay",
   manual: "Modifica manuale",
   chat: "Koma",
   mcp: "ChatGPT",
@@ -26,6 +27,7 @@ const SOURCE_LABELS: Record<string, string> = {
 const BASIS_LABELS: Record<string, string> = {
   media_vendite_compatibili: "mediana vendite",
   riga_esatta_piu_recente: "riga esatta graded",
+  ebay_mediana_annunci: "mediana annunci eBay",
   invariato_nessuna_vendita: "nessuna vendita, invariato",
 };
 
