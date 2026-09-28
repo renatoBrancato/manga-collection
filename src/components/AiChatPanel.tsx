@@ -38,6 +38,7 @@ const FIELD_LABELS: Record<string, string> = {
   is_first_print: "Prima stampa",
   has_obi: "OBI",
   is_sealed: "Sigillato",
+  is_for_sale: "In vendita",
   printing_notes: "Stampa",
   grading_authority: "Grading",
   grading_value: "Voto",

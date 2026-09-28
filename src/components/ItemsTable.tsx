@@ -29,6 +29,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
   const [gradingFilter, setGradingFilter] = useState("all");
   const [obiFilter, setObiFilter] = useState("all");
   const [sealedFilter, setSealedFilter] = useState("all");
+  const [saleFilter, setSaleFilter] = useState("all");
   const [printingFilter, setPrintingFilter] = useState("all");
   const [languageFilter, setLanguageFilter] = useState<string[]>([]);
   const [valueFilter, setValueFilter] = useState("all");
@@ -56,6 +57,8 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
       if (obiFilter === "no" && item.has_obi !== false) return false;
       if (sealedFilter === "yes" && !item.is_sealed) return false;
       if (sealedFilter === "no" && item.is_sealed) return false;
+      if (saleFilter === "yes" && !item.is_for_sale) return false;
+      if (saleFilter === "no" && item.is_for_sale) return false;
       if (printingFilter === "first" && item.is_first_print !== true) return false;
       if (printingFilter === "reprint" && item.is_first_print !== false) return false;
       if (languageFilter.length > 0 && !languageFilter.includes(item.language ?? "")) return false;
@@ -82,6 +85,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
     gradingFilter,
     obiFilter,
     sealedFilter,
+    saleFilter,
     printingFilter,
     languageFilter,
     valueFilter,
@@ -96,6 +100,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
     gradingFilter,
     obiFilter,
     sealedFilter,
+    saleFilter,
     printingFilter,
     languageFilter.length > 0 ? "selected" : "all",
     valueFilter,
@@ -109,6 +114,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
     setGradingFilter("all");
     setObiFilter("all");
     setSealedFilter("all");
+    setSaleFilter("all");
     setPrintingFilter("all");
     setLanguageFilter([]);
     setValueFilter("all");
@@ -235,6 +241,11 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
               <option value="yes">Solo sigillati</option>
               <option value="no">Solo non sigillati</option>
             </select>
+            <select value={saleFilter} onChange={(e) => setSaleFilter(e.target.value)} className="input w-full">
+              <option value="all">Vendita: tutti</option>
+              <option value="yes">Solo in vendita</option>
+              <option value="no">Non in vendita</option>
+            </select>
             <select
               value={printingFilter}
               onChange={(e) => setPrintingFilter(e.target.value)}
@@ -310,7 +321,17 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
                 </div>
               )}
 
-              <CoverImage item={item} className="aspect-[2/3] w-full" />
+              <div className="relative overflow-hidden">
+                <CoverImage item={item} className="aspect-[2/3] w-full" />
+                {item.is_for_sale && (
+                  <span
+                    title="In vendita"
+                    className="pointer-events-none absolute -left-9 top-4 w-32 -rotate-45 bg-rose-500 py-0.5 text-center text-[10px] font-bold uppercase tracking-wider text-white shadow-md shadow-black/40"
+                  >
+                    In vendita
+                  </span>
+                )}
+              </div>
 
               <div className="flex flex-1 flex-col gap-1 p-2.5 text-xs">
                 <div className="flex items-center justify-between gap-1">

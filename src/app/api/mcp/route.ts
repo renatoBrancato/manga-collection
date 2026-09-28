@@ -115,6 +115,10 @@ function buildServer(userId: string) {
           .describe(
             "true solo se il volume è ancora nel cellophane originale di fabbrica (sealed); false altrimenti. Un pezzo in slab gradato non è sealed"
           ),
+        is_for_sale: z
+          .boolean()
+          .optional()
+          .describe("true se l'utente ha messo in vendita il pezzo; ometti altrimenti"),
         printing_notes: z.string().optional().describe("Note libere sulla stampa/edizione, es. '3a ristampa'"),
         grading_authority: z
           .enum(["CGC", "CBCS", "BGS", "altro"])
@@ -187,6 +191,7 @@ function buildServer(userId: string) {
         is_first_print: z.boolean().optional(),
         has_obi: z.boolean().optional().describe("true se ha la fascetta OBI, false se manca"),
         is_sealed: z.boolean().optional().describe("true se ancora sigillato nel cellophane originale"),
+        is_for_sale: z.boolean().optional().describe("true per mettere il pezzo in vendita, false per toglierlo"),
         printing_notes: z.string().optional(),
         grading_authority: z
           .enum(["CGC", "CBCS", "BGS", "altro"])

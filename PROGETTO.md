@@ -102,6 +102,7 @@ completo e `supabase/migrations/` per lo schema SQL):
 | `is_first_print` + `printing_notes` | prima stampa (dal colophon 奥付/初版) o ristampa |
 | `has_obi` | fascetta OBI presente/assente; `null` se non determinabile (in quel caso la valutazione non filtra per OBI) |
 | `is_sealed` | ancora nel cellophane originale; sempre `true`/`false` (default `false`) |
+| `is_for_sale` | messo in vendita dal collezionista: fascetta "In vendita" sulla copertina e filtro dedicato (default `false`) |
 | `grading_authority` | `CGC` / `CBCS` / `BGS` / `altro`, se il volume è gradato (slab) |
 | `grading_value` | voto di grading, se presente |
 | `condition_estimate` | stima testuale della condizione, se **non** gradato |

@@ -16,6 +16,8 @@ export interface MangaItem {
   has_obi: boolean | null;
   /** Ancora sigillato nel cellophane originale. */
   is_sealed: boolean;
+  /** Messo in vendita dal collezionista. */
+  is_for_sale: boolean;
   printing_notes: string | null;
   grading_authority: GradingAuthority | null;
   grading_value: number | null;
@@ -50,6 +52,7 @@ export interface IncomingItemPayload {
   is_first_print?: boolean | null;
   has_obi?: boolean | null;
   is_sealed?: boolean | null;
+  is_for_sale?: boolean | null;
   printing_notes?: string | null;
   grading_authority?: GradingAuthority | null;
   grading_value?: number | null;

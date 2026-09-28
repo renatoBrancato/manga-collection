@@ -40,6 +40,7 @@ export default function AddItemForm({ userId }: { userId: string }) {
       is_first_print: isFirstPrintRaw === "" ? null : isFirstPrintRaw === "true",
       has_obi: hasObiRaw === "" ? null : hasObiRaw === "true",
       is_sealed: form.get("is_sealed") === "true",
+      is_for_sale: form.get("is_for_sale") === "true",
       printing_notes: String(form.get("printing_notes") || "") || null,
       grading_authority: graded ? String(form.get("grading_authority") || "") || null : null,
       grading_value: graded && form.get("grading_value") ? Number(form.get("grading_value")) : null,
@@ -142,6 +143,10 @@ export default function AddItemForm({ userId }: { userId: string }) {
       <select name="is_sealed" defaultValue="false" className="input">
         <option value="false">Non sigillato</option>
         <option value="true">Sigillato (cellophane originale)</option>
+      </select>
+      <select name="is_for_sale" defaultValue="false" className="input">
+        <option value="false">Non in vendita</option>
+        <option value="true">In vendita</option>
       </select>
       <input name="printing_notes" placeholder="Note stampa (es. 3a ristampa)" className="input" />
 

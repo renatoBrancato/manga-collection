@@ -76,6 +76,7 @@ function toRow(userId: string, item: IncomingItemPayload, source: "manual" | "mc
     is_first_print: item.is_first_print ?? null,
     has_obi: item.has_obi ?? null,
     is_sealed: item.is_sealed ?? false,
+    is_for_sale: item.is_for_sale ?? false,
     printing_notes: item.printing_notes ?? null,
     grading_authority: item.grading_authority ?? null,
     grading_value: item.grading_value ?? null,

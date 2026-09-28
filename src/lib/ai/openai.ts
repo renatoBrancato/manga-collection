@@ -58,6 +58,10 @@ const itemProperties = {
     type: ["boolean", "null"],
     description: "true solo se il pezzo è ancora nel cellophane originale di fabbrica",
   },
+  is_for_sale: {
+    type: ["boolean", "null"],
+    description: "true se l'utente dice di averlo messo in vendita; altrimenti false/null",
+  },
   printing_notes: { type: ["string", "null"] },
   grading_authority: { type: ["string", "null"], enum: ["CGC", "CBCS", "BGS", "altro", null] },
   grading_value: { type: ["number", "null"] },
@@ -79,6 +83,7 @@ const patchProperties = {
   is_first_print: { type: "boolean" },
   has_obi: { type: "boolean" },
   is_sealed: { type: "boolean" },
+  is_for_sale: { type: "boolean", description: "true per metterlo in vendita, false per toglierlo" },
   printing_notes: { type: "string" },
   grading_authority: { type: "string", enum: ["CGC", "CBCS", "BGS", "altro"] },
   grading_value: { type: "number" },
@@ -295,6 +300,8 @@ Quando ricevi una o più foto:
   chiama prepare_add_manga;
 - se chiede di aggiornare un pezzo, usa prima search_collection e poi
   prepare_update_manga;
+- "mettilo in vendita" / "non è più in vendita": prepare_update_manga con
+  is_for_sale true/false (nessuna valutazione necessaria);
 - per un aggiornamento indica cover_photo solo se una foto è una copertina o
   l'utente chiede esplicitamente di sostituire l'immagine. Usa null per
   colophon, retro, dettagli interni o slab che servono solo all'analisi.
@@ -375,6 +382,7 @@ function compactItem(item: MangaItem) {
     is_first_print: item.is_first_print,
     has_obi: item.has_obi,
     is_sealed: item.is_sealed,
+    is_for_sale: item.is_for_sale,
     grading_authority: item.grading_authority,
     grading_value: item.grading_value,
     condition_estimate: item.condition_estimate,
