@@ -55,6 +55,8 @@ export default function CoverImage({
     <img
       src={src}
       alt={item.title}
+      loading="lazy"
+      decoding="async"
       className={`object-cover ${className}`}
       onError={() => setIndex((i) => i + 1)}
     />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { MangaItem } from "@/lib/types";
@@ -22,6 +22,8 @@ function formatCondition(item: MangaItem): string {
   if (item.condition_estimate) return item.condition_estimate;
   return "-";
 }
+
+const PAGE_SIZE = 48;
 
 export default function ItemsTable({ items, readOnly = false }: { items: MangaItem[]; readOnly?: boolean }) {
   const supabase = createClient();
@@ -94,6 +96,32 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
     sort,
     search,
   ]);
+
+  // Scorrimento infinito: filtri e totali lavorano su tutta la collezione, ma
+  // la griglia disegna le schede a blocchi, così le copertine non vengono
+  // scaricate tutte all'apertura.
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [lastFiltered, setLastFiltered] = useState(filtered);
+  if (lastFiltered !== filtered) {
+    setLastFiltered(filtered);
+    setVisibleCount(PAGE_SIZE);
+  }
+  const visible = filtered.slice(0, visibleCount);
+  const hasMore = visibleCount < filtered.length;
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setVisibleCount((count) => count + PAGE_SIZE);
+      },
+      { rootMargin: "800px 0px" }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, visibleCount]);
 
   // Conta solo i filtri collassati: la ricerca resta sempre visibile e
   // l'ordinamento non riduce i risultati.
@@ -320,7 +348,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-          {filtered.map((item) => (
+          {visible.map((item) => (
             <div
               key={item.id}
               className="group relative flex flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50 transition hover:border-slate-600"
@@ -416,6 +444,17 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
               </div>
             </div>
           ))}
+        </div>
+      )}
+      {hasMore && (
+        <div ref={sentinelRef} className="flex justify-center py-4">
+          <button
+            type="button"
+            onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
+            className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-slate-800"
+          >
+            Mostra altri ({filtered.length - visibleCount})
+          </button>
         </div>
       )}
 
