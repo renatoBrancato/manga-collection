@@ -1,4 +1,5 @@
 import Link from "next/link";
+import DonateButton from "@/components/DonateButton";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import ItemsTable from "@/components/ItemsTable";
@@ -44,8 +45,9 @@ export default async function DashboardPage() {
               href="/settings"
               className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white"
             >
-              Impostazioni
+              MCP
             </Link>
+            <DonateButton />
             <LogoutButton />
           </>
         }

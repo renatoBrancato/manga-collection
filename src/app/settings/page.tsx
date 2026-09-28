@@ -23,7 +23,7 @@ export default async function SettingsPage() {
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-slate-50 sm:px-8">
       <div className="mx-auto max-w-2xl space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">⚙️ Impostazioni</h1>
+          <h1 className="text-2xl font-bold">🔌 Connessione MCP</h1>
           <Link href="/dashboard" className="text-sm text-slate-300 hover:underline">
             ← Torna alla collezione
           </Link>

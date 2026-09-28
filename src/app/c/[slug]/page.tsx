@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import ItemsTable from "@/components/ItemsTable";
 import KpiBar from "@/components/KpiBar";
 import CollectionHero from "@/components/CollectionHero";
+import DonateButton from "@/components/DonateButton";
 import CollectionValueChart from "@/components/CollectionValueChart";
 import { loadCollectionHistory } from "@/lib/history";
 import type { MangaItem } from "@/lib/types";
@@ -48,6 +49,7 @@ export default async function SharedCollectionPage({
             Gestisci la tua collezione su Manga Collection
           </Link>
         }
+        actions={<DonateButton />}
       />
 
       <KpiBar items={(items ?? []) as MangaItem[]} />

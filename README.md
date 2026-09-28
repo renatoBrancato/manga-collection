@@ -19,7 +19,7 @@ Foto volume -> ChatGPT (connettore MCP personale, Developer Mode)
 
 - Auth utenti: Google login via Supabase Auth.
 - Autenticazione MCP: ogni utente ha una api_key privata (pagina
-  Impostazioni), usata come Bearer token nel proprio connettore MCP.
+  pagina MCP), usata come Bearer token nel proprio connettore MCP.
   L'endpoint /api/mcp la valida con la service-role key (bypassando
   RLS) e legge/scrive solo per quel user_id.
 - DB: Supabase Postgres, schema gestito tramite Supabase CLI in
@@ -91,7 +91,7 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://TUO-DOMINIO.vercel.app/api/
 
 ### 5. Configura il connettore MCP in ChatGPT
 
-1. Nella web app, vai su Impostazioni e copia la tua API key personale.
+1. Nella web app, vai su MCP e copia la tua API key personale.
 2. In ChatGPT: Impostazioni -> Apps & Connectors -> attiva Developer
    Mode -> aggiungi un connettore MCP custom.
 3. URL del connettore: `https://TUO-DOMINIO.vercel.app/api/mcp`
