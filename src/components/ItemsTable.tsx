@@ -30,7 +30,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
   const [obiFilter, setObiFilter] = useState("all");
   const [sealedFilter, setSealedFilter] = useState("all");
   const [printingFilter, setPrintingFilter] = useState("all");
-  const [languageFilter, setLanguageFilter] = useState("all");
+  const [languageFilter, setLanguageFilter] = useState<string[]>([]);
   const [valueFilter, setValueFilter] = useState("all");
   const [sort, setSort] = useState("newest");
   const [search, setSearch] = useState("");
@@ -58,7 +58,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
       if (sealedFilter === "no" && item.is_sealed) return false;
       if (printingFilter === "first" && item.is_first_print !== true) return false;
       if (printingFilter === "reprint" && item.is_first_print !== false) return false;
-      if (languageFilter !== "all" && item.language !== languageFilter) return false;
+      if (languageFilter.length > 0 && !languageFilter.includes(item.language ?? "")) return false;
       if (valueFilter === "valued" && item.estimated_value == null) return false;
       if (valueFilter === "missing" && item.estimated_value != null) return false;
       if (!query) return true;
@@ -97,7 +97,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
     obiFilter,
     sealedFilter,
     printingFilter,
-    languageFilter,
+    languageFilter.length > 0 ? "selected" : "all",
     valueFilter,
   ].filter((value) => value !== "all").length;
 
@@ -110,7 +110,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
     setObiFilter("all");
     setSealedFilter("all");
     setPrintingFilter("all");
-    setLanguageFilter("all");
+    setLanguageFilter([]);
     setValueFilter("all");
   }
 
@@ -199,6 +199,18 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
               <path d="m6 9 6 6 6-6" />
             </svg>
           </button>
+
+          <label className="flex shrink-0 items-center gap-2 text-sm text-slate-400">
+            <span>Ordina per</span>
+            <select value={sort} onChange={(e) => setSort(e.target.value)} className="input min-w-40">
+              <option value="newest">Più recenti</option>
+              <option value="title">Titolo A-Z</option>
+              <option value="year_desc">Anno: più nuovi</option>
+              <option value="year_asc">Anno: più vecchi</option>
+              <option value="value_desc">Valore: decrescente</option>
+              <option value="value_asc">Valore: crescente</option>
+            </select>
+          </label>
         </div>
 
         {filtersOpen && (
@@ -239,27 +251,29 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
             </select>
 
             {languages.length > 0 && (
-              <select
-                value={languageFilter}
-                onChange={(e) => setLanguageFilter(e.target.value)}
-                className="input w-full"
-              >
-                <option value="all">Ogni lingua</option>
-                {languages.map((language) => (
-                  <option key={language} value={language}>
-                    {language}
-                  </option>
-                ))}
-              </select>
+              <fieldset className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2">
+                <legend className="px-1 text-xs text-slate-400">Lingua</legend>
+                <div className="flex flex-wrap gap-x-4 gap-y-2">
+                  {languages.map((language) => (
+                    <label key={language} className="flex items-center gap-2 text-sm text-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={languageFilter.includes(language)}
+                        onChange={(event) =>
+                          setLanguageFilter((selected) =>
+                            event.target.checked
+                              ? [...selected, language]
+                              : selected.filter((value) => value !== language),
+                          )
+                        }
+                        className="h-4 w-4 accent-indigo-500"
+                      />
+                      {language}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
             )}
-            <select value={sort} onChange={(e) => setSort(e.target.value)} className="input w-full">
-              <option value="newest">Più recenti</option>
-              <option value="title">Titolo A-Z</option>
-              <option value="year_desc">Anno: più nuovi</option>
-              <option value="year_asc">Anno: più vecchi</option>
-              <option value="value_desc">Valore: decrescente</option>
-              <option value="value_asc">Valore: crescente</option>
-            </select>
           </div>
         )}
       </div>

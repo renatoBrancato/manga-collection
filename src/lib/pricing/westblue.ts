@@ -99,6 +99,7 @@ function normalize(value: string): string {
     .toLowerCase()
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\bno\.?\s*(?=\d)/g, "#")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }
