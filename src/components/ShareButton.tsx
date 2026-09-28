@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -27,12 +28,43 @@ export default function ShareButton({
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [origin, setOrigin] = useState("");
-
-  useEffect(() => {
-    setOrigin(window.location.origin);
-  }, []);
+  const [mobile, setMobile] = useState(false);
+  const [position, setPosition] = useState({ top: 0, right: 16 });
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   const shareUrl = slug && origin ? `${origin}/c/${slug}` : "";
+
+  function updatePopoverPosition() {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const isMobile = window.matchMedia("(max-width: 639px)").matches;
+    setMobile(isMobile);
+    setPosition({
+      top: rect.bottom + 8,
+      right: Math.max(16, window.innerWidth - rect.right),
+    });
+  }
+
+  function togglePopover() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    setOrigin(window.location.origin);
+    updatePopoverPosition();
+    setOpen(true);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    const reposition = () => updatePopoverPosition();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [open]);
 
   async function handleToggle() {
     setLoading(true);
@@ -63,45 +95,76 @@ export default function ShareButton({
   return (
     <div className="relative">
       <button
-        onClick={() => setOpen((v) => !v)}
+        ref={buttonRef}
+        onClick={togglePopover}
         className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-slate-800"
       >
         🔗 Condividi
       </button>
 
-      {open && (
-        <div className="absolute right-0 z-20 mt-2 w-80 rounded-xl border border-slate-800 bg-slate-900 p-4 shadow-xl">
-          <p className="text-sm text-slate-300">
-            Condividi la tua collezione con un link pubblico in sola lettura: chi lo apre può solo
-            guardare, non può aggiungere o rimuovere nulla.
-          </p>
+      {open &&
+        createPortal(
+          <div
+            className={`fixed inset-0 z-[100] ${mobile ? "flex items-center justify-center bg-black/70 p-4" : ""}`}
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setOpen(false);
+            }}
+          >
+            <div
+              role="dialog"
+              aria-modal={mobile}
+              aria-label="Condividi la collezione"
+              className={`rounded-xl border border-slate-800 bg-slate-900 p-4 shadow-xl ${
+                mobile ? "w-full max-w-sm" : "fixed w-[min(20rem,calc(100vw-2rem))]"
+              }`}
+              style={!mobile ? { top: position.top, right: position.right } : undefined}
+            >
+              {mobile && (
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="font-semibold text-white">Condividi la collezione</h2>
+                  <button
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    className="rounded-md px-2 py-1 text-slate-400 hover:bg-white/10 hover:text-white"
+                    aria-label="Chiudi"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+              <p className="text-sm text-slate-300">
+                Condividi la tua collezione con un link pubblico in sola lettura: chi lo apre può solo
+                guardare, non può aggiungere o rimuovere nulla.
+              </p>
 
-          <label className="mt-3 flex items-center gap-2 text-sm text-slate-200">
-            <input
-              type="checkbox"
-              checked={enabled}
-              disabled={loading}
-              onChange={handleToggle}
-              className="h-4 w-4 rounded border-slate-700 bg-slate-950"
-            />
-            Collezione pubblica
-          </label>
+              <label className="mt-3 flex items-center gap-2 text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  disabled={loading}
+                  onChange={handleToggle}
+                  className="h-4 w-4 rounded border-slate-700 bg-slate-950"
+                />
+                Collezione pubblica
+              </label>
 
-          {enabled && slug && (
-            <div className="mt-3 flex items-center gap-2">
-              <code className="flex-1 truncate rounded-lg bg-slate-950 px-2 py-1.5 text-xs text-emerald-400">
-                {shareUrl}
-              </code>
-              <button
-                onClick={handleCopy}
-                className="rounded-lg bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-400"
-              >
-                {copied ? "Copiato!" : "Copia"}
-              </button>
+              {enabled && slug && (
+                <div className="mt-3 flex min-w-0 items-center gap-2">
+                  <code className="min-w-0 flex-1 truncate rounded-lg bg-slate-950 px-2 py-1.5 text-xs text-emerald-400">
+                    {shareUrl}
+                  </code>
+                  <button
+                    onClick={handleCopy}
+                    className="shrink-0 rounded-lg bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-400"
+                  >
+                    {copied ? "Copiato!" : "Copia"}
+                  </button>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
