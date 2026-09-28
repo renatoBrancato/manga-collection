@@ -13,6 +13,8 @@ type HistoryRow = {
   match_count: number | null;
 };
 
+type TrackerLink = { series: string | null; url: string; preselected: boolean };
+
 const SOURCE_LABELS: Record<string, string> = {
   westblue: "West Blue",
   manual: "Modifica manuale",
@@ -31,6 +33,25 @@ const BASIS_LABELS: Record<string, string> = {
 export default function ItemHistoryModal({ item, onClose }: { item: MangaItem; onClose: () => void }) {
   const [rows, setRows] = useState<HistoryRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tracker, setTracker] = useState<TrackerLink | null>(null);
+
+  useEffect(() => {
+    const series = item.series ?? item.title;
+    if (!series) return;
+    let active = true;
+    const params = new URLSearchParams({
+      series,
+      format: item.format === "zashi" ? "zashi" : "tankobon",
+      graded: String(Boolean(item.grading_authority)),
+    });
+    fetch(`/api/westblue/link?${params}`)
+      .then((response) => (response.ok ? (response.json() as Promise<TrackerLink>) : null))
+      .then((link) => active && link && setTracker(link))
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [item.series, item.title, item.format, item.grading_authority]);
 
   useEffect(() => {
     let active = true;
@@ -66,6 +87,13 @@ export default function ItemHistoryModal({ item, onClose }: { item: MangaItem; o
   const first = valued[0]?.value ?? null;
   const last = valued.at(-1)?.value ?? null;
   const delta = first != null && last != null && valued.length > 1 ? last - first : null;
+  const trackerFilters = [
+    item.format === "zashi" ? "Zasshi" : item.grading_authority ? "Graded" : "Raw",
+    item.format !== "zashi" && item.volume_number != null ? `Vol. ${item.volume_number}` : null,
+    item.format === "zashi" && item.issue_number ? `N. ${item.issue_number}` : null,
+    item.grading_authority && item.grading_value != null ? `Voto ${item.grading_value}` : null,
+    item.format !== "zashi" && item.has_obi != null ? `OBI ${item.has_obi ? "sì" : "no"}` : null,
+  ].filter(Boolean);
 
   return (
     <div
@@ -139,6 +167,28 @@ export default function ItemHistoryModal({ item, onClose }: { item: MangaItem; o
                 ))}
             </ul>
           </>
+        )}
+
+        {tracker && (
+          <div className="mt-4 rounded-lg border border-slate-800 bg-slate-950/60 p-3 text-sm">
+            <a
+              href={tracker.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 font-medium text-indigo-300 hover:text-indigo-200"
+            >
+              Vedi su West Blue
+              {tracker.series ? <span className="text-slate-400">· {tracker.series}</span> : null}
+              <span aria-hidden="true">↗</span>
+            </a>
+            <p className="mt-1 text-xs text-slate-500">
+              {tracker.series == null
+                ? "Serie non trovata nel tracker: cercala a mano."
+                : tracker.preselected
+                  ? `Imposta sulla pagina: ${trackerFilters.join(" · ")}.`
+                  : `Scegli ${trackerFilters[0]} e cerca "${tracker.series}", poi: ${trackerFilters.slice(1).join(" · ") || "nessun altro filtro"}.`}
+            </p>
+          </div>
         )}
       </div>
     </div>

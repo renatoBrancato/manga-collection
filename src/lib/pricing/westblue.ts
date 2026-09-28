@@ -129,6 +129,29 @@ export function matchSeriesName(query: string, available: string[]): string | nu
   return scored[0]?.name ?? null;
 }
 
+/**
+ * Nome della serie come indicizzato dal tracker e link alla pagina West Blue.
+ * La pagina accetta solo `#t=<serie>` e si apre sempre sulla vista Graded:
+ * volume, OBI e tipo vanno impostati a mano, quindi si restituisce anche se
+ * la serie esiste nel dataset graded (altrimenti il link non la preseleziona).
+ */
+export async function resolveTrackerLink(input: {
+  series: string;
+  format?: "tankobon" | "zashi" | null;
+  graded: boolean;
+}): Promise<{ series: string | null; url: string; preselected: boolean }> {
+  const index = await getIndex();
+  const dataset = input.format === "zashi" ? "sold_zasshi" : input.graded ? "sold_graded" : "sold_raw";
+  const matched = matchSeriesName(input.series, Object.keys(index.datasets?.[dataset] ?? {}));
+  if (!matched) return { series: null, url: PRICE_TRACKER_URL, preselected: false };
+  const inGraded = Boolean(index.datasets?.sold_graded?.[matched]);
+  return {
+    series: matched,
+    url: `${PRICE_TRACKER_URL}#t=${encodeURIComponent(matched)}`,
+    preselected: input.format !== "zashi" && inGraded,
+  };
+}
+
 function parseSoldDate(row: TrackerRow): number {
   const parsed = row.sold_date ? Date.parse(row.sold_date) : NaN;
   return Number.isNaN(parsed) ? 0 : parsed;
