@@ -51,7 +51,7 @@ const MAGAZINE_TERMS: Array<{ test: RegExp; query: string; title: RegExp }> = [
 
 const GRADED = /\b(psa|bgs|cgc|graded|slab(bed)?)\b/i;
 const NOT_A_SINGLE_ISSUE =
-  /\b(lot|lots|set of|bundle|complete set|reprint|replica|facsimile|poster only|card only|only card|no magazine|cover only|clipping|cut ?out)\b|まとめ|セット/i;
+  /\b(lot|lots|set of|bundle|complete set|reprint|replica|facsimile|poster only|card only|only card|no magazine|cover only|clipping|cut ?out|comics|tankobon|\d\s*sets?)\b|\d\s*set\b|まとめ|セット|冊/i;
 
 export function ebayConfigured(): boolean {
   return Boolean(process.env.EBAY_CLIENT_ID && process.env.EBAY_CLIENT_SECRET);
@@ -101,6 +101,10 @@ export function titleMatchesIssue(title: string, magazine: RegExp, numbers: numb
   if (!magazine.test(title)) return false;
   if (!new RegExp(`(?<!\\d)${year}(?!\\d)`).test(title)) return false;
   const withoutYear = title.replace(new RegExp(`(?<!\\d)${year}(?!\\d)`, "g"), " ");
+  // Pacchetti con altri numeri ("#36-37 & #38", "No.36-37.No.38"): prezzo di più riviste.
+  for (const match of withoutYear.matchAll(/(?:no\.?|#|&|\band\b)\s*0?(\d{1,2})(?!\d)/gi)) {
+    if (!numbers.includes(Number(match[1]))) return false;
+  }
   if (numbers.length > 1) {
     const joined = numbers.map(standalone).join("\\s*(?:[-/・&,~–—+]|and)\\s*(?:no\\.?\\s*|#)?");
     return new RegExp(joined, "i").test(withoutYear);
