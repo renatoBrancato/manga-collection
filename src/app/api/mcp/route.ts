@@ -246,7 +246,7 @@ function buildServer(userId: string) {
     {
       title: "Cerca il valore di mercato su West Blue",
       description:
-        `Interroga direttamente il Manga Price Tracker di West Blue (${PRICE_TRACKER_URL}) e restituisce le vendite compatibili con il pezzo, con il valore suggerito già convertito in EUR. Usa SEMPRE questo tool per i prezzi: la pagina carica i dati via JavaScript, quindi la navigazione web non riesce a leggerli. Per i graded restituisce la riga esatta con stesso volume e voto; per i RAW la media delle vendite compatibili. Per gli zashi RAW che il tracker non segue ripiega sulla mediana degli annunci eBay attivi (provider "ebay"): dillo all'utente.`,
+        `Interroga direttamente il Manga Price Tracker di West Blue (${PRICE_TRACKER_URL}) e restituisce le vendite compatibili con il pezzo, con il valore suggerito già convertito in EUR. Usa SEMPRE questo tool per i prezzi: la pagina carica i dati via JavaScript, quindi la navigazione web non riesce a leggerli. Per i graded restituisce la riga esatta con stesso volume e voto; per i RAW la media delle vendite compatibili. Quando il tracker non ha un prezzo RAW (volumi non tracciati, edizioni non giapponesi, zashi recenti) ripiega sulla mediana degli annunci eBay attivi (provider "ebay"): dillo all'utente. Se nemmeno eBay basta, il valore resta manuale.`,
       inputSchema: {
         series: z.string().describe("Nome della serie in inglese, es. 'Attack on Titan'"),
         volume: z.number().optional().describe("Numero del volume"),
@@ -259,9 +259,15 @@ function buildServer(userId: string) {
           .optional()
           .describe("Solo zashi: numero della rivista come stampato, es. '36-37'. Con series = nome della rivista in romaji"),
         year: z.number().int().optional().describe("Solo zashi: anno di uscita del numero, es. 2025"),
+        language: z
+          .string()
+          .optional()
+          .describe("Lingua dell'edizione (Japanese, Italian, English...): West Blue copre solo il giapponese, per le altre si usa eBay"),
+        is_first_print: z.boolean().optional().describe("Prima stampa, se nota"),
+        special_edition: z.boolean().optional().describe("true se variant, box, limited, celebration o simili"),
       },
     },
-    async ({ series, volume, format, graded, grade, has_obi, issue_number, year }) => {
+    async ({ series, volume, format, graded, grade, has_obi, issue_number, year, language, is_first_print, special_edition }) => {
       try {
         const result = await lookupMarketPrice({
           series,
@@ -272,6 +278,9 @@ function buildServer(userId: string) {
           hasObi: has_obi ?? null,
           issue: issue_number ?? null,
           year: year ?? null,
+          language: language ?? null,
+          isFirstPrint: is_first_print ?? null,
+          isSpecialEdition: special_edition === true,
         });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (cause) {

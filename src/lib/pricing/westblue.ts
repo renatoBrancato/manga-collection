@@ -8,7 +8,7 @@
  * regole di valutazione, in modo deterministico e senza costi di token.
  */
 
-import { lookupEbayZasshi } from "@/lib/pricing/ebay";
+import { isJapaneseEdition, lookupEbayVolume, lookupEbayZasshi } from "@/lib/pricing/ebay";
 
 const CDN = "https://cdn.shopify.com/s/files/1/0722/8532/3421/files/";
 const INDEX_FILE = "manga_tracker_index.json";
@@ -254,6 +254,11 @@ export type PriceLookupInput = {
   issue?: string | null;
   /** Solo zasshi: anno di uscita del numero. */
   year?: number | null;
+  /** Lingua dell'edizione: West Blue copre solo quella giapponese. */
+  language?: string | null;
+  /** Solo per il fallback eBay dei tankōbon. */
+  isFirstPrint?: boolean | null;
+  isSpecialEdition?: boolean;
 };
 
 export type PriceLookupResult = {
@@ -299,6 +304,33 @@ export async function lookupMarketPrice(input: PriceLookupInput): Promise<PriceL
     const tracker = await lookupZasshiPrice(input);
     return tracker.suggested_value_eur == null ? withEbayFallback(input, tracker) : tracker;
   }
+  // West Blue traccia solo edizioni giapponesi: per le altre il suo prezzo
+  // sarebbe quello sbagliato, quindi si va direttamente su eBay.
+  if (!isJapaneseEdition(input.language)) {
+    return withEbayFallback(input, await notTrackedEdition(input));
+  }
+  const tracker = await lookupTankobonTracker(input);
+  return tracker.suggested_value_eur == null ? withEbayFallback(input, tracker) : tracker;
+}
+
+async function notTrackedEdition(input: PriceLookupInput): Promise<PriceLookupResult> {
+  return {
+    source: PRICE_TRACKER_URL,
+    series_query: input.series,
+    series_matched: null,
+    dataset: "none",
+    market_state: input.graded ? "graded" : "raw",
+    requested: { volume: input.volume ?? null, grade: input.grade ?? null, obi: "unknown" },
+    matched_rows: [],
+    match_count: 0,
+    usd_eur_rate: round2(await getUsdToEurRate()),
+    suggested_value_eur: null,
+    suggested_basis: "none",
+    note: `West Blue traccia solo edizioni giapponesi: per l'edizione "${input.language}" non ha prezzi. Lascia il valore vuoto (manuale) e spiegalo.`,
+  };
+}
+
+async function lookupTankobonTracker(input: PriceLookupInput): Promise<PriceLookupResult> {
   const dataset = input.graded ? "sold_graded" : "sold_raw";
   const rate = await getUsdToEurRate();
   const index = await getIndex();
@@ -524,21 +556,39 @@ async function lookupZasshiPrice(input: PriceLookupInput): Promise<PriceLookupRe
 }
 
 /**
- * West Blue segue solo i numeri "chiave": per le riviste recenti non ha
- * vendite RAW. In quel caso si ripiega sugli annunci attivi eBay, a patto di
- * conoscere numero e anno (senza, gli annunci mescolerebbero annate diverse).
+ * Fallback generale: se West Blue non ha un prezzo RAW si usano gli annunci
+ * attivi eBay (mercato e lingua dell'edizione). Serve un pezzo identificato
+ * con precisione (volume, oppure numero e anno per gli zashi); i graded
+ * richiedono la riga esatta con lo stesso voto e restano manuali. Se neanche
+ * eBay trova abbastanza annunci il valore resta vuoto, da inserire a mano.
  */
 async function withEbayFallback(input: PriceLookupInput, tracker: PriceLookupResult): Promise<PriceLookupResult> {
-  const issue = parseIssue(input.issue);
-  const year = input.year ?? issue.year;
-  if (input.graded || issue.numbers.length === 0 || year == null) return tracker;
-
-  const ebay = await lookupEbayZasshi({
-    magazine: input.series,
-    issueNumbers: issue.numbers,
-    year,
-    usdToEur: tracker.usd_eur_rate,
-  });
+  if (input.graded) return tracker;
+  let ebay;
+  let label: string;
+  if (input.format === "zashi") {
+    const issue = parseIssue(input.issue);
+    const year = input.year ?? issue.year;
+    if (issue.numbers.length === 0 || year == null) return tracker;
+    ebay = await lookupEbayZasshi({
+      magazine: input.series,
+      issueNumbers: issue.numbers,
+      year,
+      usdToEur: tracker.usd_eur_rate,
+    });
+    label = "di questo numero";
+  } else {
+    if (input.volume == null) return tracker;
+    ebay = await lookupEbayVolume({
+      series: input.series,
+      volume: input.volume,
+      language: input.language,
+      usdToEur: tracker.usd_eur_rate,
+      isFirstPrint: input.isFirstPrint,
+      isSpecialEdition: input.isSpecialEdition,
+    });
+    label = isJapaneseEdition(input.language) ? "di questo volume" : "per questa edizione";
+  }
   if (!ebay.configured) return tracker;
   if (ebay.value_eur == null) {
     return { ...tracker, note: `${tracker.note} eBay: ${ebay.note}` };
@@ -550,7 +600,7 @@ async function withEbayFallback(input: PriceLookupInput, tracker: PriceLookupRes
     series_matched: tracker.series_matched ?? input.series,
     matched_rows: ebay.listings.slice(0, 10).map((listing) => ({
       title: listing.title,
-      volume: null,
+      volume: input.format === "zashi" ? null : input.volume ?? null,
       grade: null,
       obi: null,
       price_usd: listing.price_usd,
@@ -559,6 +609,6 @@ async function withEbayFallback(input: PriceLookupInput, tracker: PriceLookupRes
     match_count: ebay.listings.length,
     suggested_value_eur: ebay.value_eur,
     suggested_basis: "ebay_mediana_annunci",
-    note: `${ebay.note} West Blue: nessuna vendita RAW di questo numero.`,
+    note: `${ebay.note} West Blue: nessuna vendita RAW ${label}.`,
   };
 }

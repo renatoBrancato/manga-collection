@@ -135,6 +135,13 @@ const functionTools = [
           description: "Solo zashi: numero della rivista come stampato, es. '36-37'",
         },
         year: { type: ["integer", "null"], description: "Solo zashi: anno di uscita del numero, es. 2025" },
+        language: {
+          type: ["string", "null"],
+          description:
+            "Lingua dell'edizione (Japanese, Italian, English...). West Blue copre solo il giapponese: per le altre si usano gli annunci eBay del paese giusto",
+        },
+        is_first_print: { type: ["boolean", "null"], description: "Prima stampa: true, false o null se ignoto" },
+        special_edition: { type: "boolean", description: "true se variant, box, limited, celebration o simili" },
       },
       required: ["series", "graded"],
       additionalProperties: false,
@@ -268,6 +275,11 @@ VALUTAZIONE OBBLIGATORIA
   la ricerca web non riesce a leggerli, quindi concluderesti a torto che il
   dato non esiste;
 - passa serie in inglese, volume, graded (true/false), grade e has_obi;
+- passa sempre language (lingua dell'edizione): un volume italiano o
+  inglese NON va valutato con i prezzi giapponesi di West Blue; il tool
+  ripiega da solo sugli annunci eBay (provider "ebay") quando West Blue non
+  ha un prezzo, e se nemmeno eBay basta il valore resta vuoto da inserire a
+  mano;
 - per gli zashi passa format "zashi", series = nome della rivista in romaji
   ("Weekly Shonen Jump", non 週刊少年ジャンプ), issue_number come stampato
   ("36-37") e year: senza numero e anno il tracker non trova il numero esatto;
@@ -410,6 +422,7 @@ function compactItem(item: MangaItem) {
     has_obi: item.has_obi,
     is_sealed: item.is_sealed,
     is_for_sale: item.is_for_sale,
+    language: item.language,
     grading_authority: item.grading_authority,
     grading_value: item.grading_value,
     condition_estimate: item.condition_estimate,
@@ -502,6 +515,9 @@ async function executeTool(
         hasObi: typeof args.has_obi === "boolean" ? args.has_obi : null,
         issue: typeof args.issue_number === "string" ? args.issue_number : null,
         year: typeof args.year === "number" ? args.year : null,
+        language: typeof args.language === "string" ? args.language : null,
+        isFirstPrint: typeof args.is_first_print === "boolean" ? args.is_first_print : null,
+        isSpecialEdition: args.special_edition === true,
       });
       return { output: JSON.stringify(result) };
     } catch (cause) {
