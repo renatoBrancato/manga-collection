@@ -36,3 +36,111 @@ body {
     @apply rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-base text-slate-50 placeholder-slate-500 outline-none focus:border-indigo-500 sm:text-sm;
   }
 }
+
+/* ---------- Landing (utente non loggato): una "tavola" manga ---------- */
+.manga-paper {
+  background-color: #f3eee2;
+  background-image: radial-gradient(rgba(17, 17, 17, 0.09) 1px, transparent 1.2px);
+  background-size: 7px 7px;
+  color: #111;
+}
+
+.manga-tone {
+  background-image: radial-gradient(#111 1.1px, transparent 1.3px);
+  background-size: 6px 6px;
+}
+
+.manga-speedlines {
+  background: repeating-conic-gradient(from 0deg, #111 0deg 1.2deg, transparent 1.2deg 6deg);
+  mask-image: radial-gradient(circle at center, transparent 0 26%, #000 58%);
+  -webkit-mask-image: radial-gradient(circle at center, transparent 0 26%, #000 58%);
+  animation: manga-spin 90s linear infinite;
+}
+
+.manga-vertical {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+}
+
+.manga-book {
+  transform-style: preserve-3d;
+  animation: manga-sway 7s ease-in-out infinite;
+}
+.manga-book:hover {
+  animation-play-state: paused;
+}
+
+.manga-sfx {
+  animation: manga-pop 2.4s ease-in-out infinite;
+}
+
+.manga-draw {
+  stroke-dasharray: 400;
+  stroke-dashoffset: 400;
+  animation: manga-draw 2.8s ease-out 0.4s forwards;
+}
+
+.manga-marquee {
+  animation: manga-marquee 28s linear infinite;
+}
+
+.manga-rise {
+  animation: manga-rise 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+@keyframes manga-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes manga-sway {
+  0%,
+  100% {
+    transform: rotateY(-28deg) rotateX(6deg);
+  }
+  50% {
+    transform: rotateY(-8deg) rotateX(2deg) translateY(-8px);
+  }
+}
+@keyframes manga-pop {
+  0%,
+  100% {
+    transform: rotate(-12deg) scale(1);
+  }
+  50% {
+    transform: rotate(-8deg) scale(1.12);
+  }
+}
+@keyframes manga-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes manga-marquee {
+  to {
+    transform: translateX(-33.3333%);
+  }
+}
+@keyframes manga-rise {
+  from {
+    opacity: 0;
+    transform: translateY(24px) rotate(-1deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .manga-book {
+    animation: none;
+    transform: rotateY(-22deg) rotateX(4deg);
+  }
+  .manga-speedlines,
+  .manga-sfx,
+  .manga-marquee,
+  .manga-rise {
+    animation: none;
+  }
+  .manga-draw {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
