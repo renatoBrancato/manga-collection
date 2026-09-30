@@ -162,6 +162,25 @@ export function parseIssue(value: string | null | undefined): { year: number | n
 }
 
 /** Trova la serie del tracker più vicina al nome fornito dall'utente. */
+/**
+ * Normalizza il numero di uno zashi ("No.36・37号" → "36-37") e segnala i
+ * numeri impossibili: i numeri doppi (合併号) sono sempre consecutivi, quindi
+ * "35・37" è una lettura sbagliata della copertina, non un fascicolo reale.
+ */
+export function checkIssueNumber(value: string | null | undefined): { normalized: string | null; problem: string | null } {
+  if (!value || !value.trim()) return { normalized: null, problem: null };
+  const { year, numbers } = parseIssue(value);
+  if (numbers.length === 0) return { normalized: value.trim(), problem: null };
+  if (numbers.length > 2 || (numbers.length === 2 && numbers[1] - numbers[0] !== 1)) {
+    return {
+      normalized: value.trim(),
+      problem: `Numero "${value}" impossibile: i numeri doppi sono sempre consecutivi (es. 36-37). È quasi certamente una cifra letta male.`,
+    };
+  }
+  const joined = numbers.join("-");
+  return { normalized: year != null && /^\s*(19|20)\d\d\s*[-/]/.test(value) ? `${year}-${joined}` : joined, problem: null };
+}
+
 export function matchSeriesName(query: string, available: string[]): string | null {
   const target = normalize(query);
   if (!target) return null;

@@ -1,5 +1,5 @@
 import type { MangaItem } from "@/lib/types";
-import { lookupMarketPrice } from "@/lib/pricing/westblue";
+import { checkIssueNumber, lookupMarketPrice } from "@/lib/pricing/westblue";
 import { revalueUserCollection } from "@/lib/pricing/revalue";
 import {
   MAX_CHAT_IMAGES,
@@ -539,6 +539,23 @@ async function executeTool(
     };
   }
 
+  if (
+    (call.name === "prepare_add_manga" || call.name === "prepare_update_manga" || call.name === "lookup_market_price") &&
+    typeof args.issue_number === "string"
+  ) {
+    const issue = checkIssueNumber(args.issue_number);
+    if (issue.problem) {
+      return {
+        output: JSON.stringify({
+          error: issue.problem,
+          instruction:
+            "Non salvare e non valutare con questo numero. Rileggi il numero sulla copertina (di solito in basso a sinistra, 'No.XX・YY'): se resta incerto chiedi all'utente quale è, proponendo le due letture consecutive plausibili.",
+        }),
+      };
+    }
+    args.issue_number = issue.normalized;
+  }
+
   if (call.name === "prepare_add_manga") {
     const { cover_photo: coverPhoto, ...addArgs } = args;
     // Con una sola foto è quasi sempre la copertina (comportamento storico);
@@ -640,7 +657,7 @@ const photoReadingInstructions = `Sei un esperto di manga giapponesi. Elenca i p
 Per ciascun pezzo:
 - series: il LOGO principale della copertina (o il nome della rivista per gli zashi);
 - volume_text: la scritta del numero di volume COPIATA esattamente come stampata (es. 巻四十, 巻ノ六十, 第23巻, 1), di solito piccola vicino al logo o sul dorso; volume_number: la sua conversione in cifre (四十=40, 六十=60, 百五=105);
-- zashi (riviste): series = nome della rivista in romaji/inglese (週刊少年ジャンプ → "Weekly Shonen Jump"); issue_number = numero del fascicolo come stampato (es. "36・37号" → "36-37"); year = anno del fascicolo SOLO se stampato e leggibile in copertina (es. "2025年", data di uscita), altrimenti null: non dedurlo dal contenuto. volume_number null;
+- zashi (riviste): series = nome della rivista in romaji/inglese (週刊少年ジャンプ → "Weekly Shonen Jump"); issue_number = numero del fascicolo come stampato (es. "36・37号" → "36-37"), di solito piccolo in basso a sinistra ("No.36・37"): leggilo cifra per cifra, 5/6 e 3/8 si confondono facilmente; i numeri doppi (合併号) sono SEMPRE consecutivi, quindi "35・37" è impossibile: se le cifre non sono consecutive rileggi, e se resti incerto metti la lettura più probabile e segnalalo in notes; year = anno del fascicolo SOLO se stampato e leggibile in copertina (es. "2025年", data di uscita), altrimenti null: non dedurlo dal contenuto. volume_number null;
 - tankōbon: issue_number e year null;
 - l'OBI è la fascetta di carta nella parte bassa con pubblicità (film, artbook, date): riporta il testo in obi_text ma NON usarlo mai per serie o volume;
 - is_sealed=true solo se è chiaramente nel cellophane originale termosaldato; una busta protettiva o uno slab non contano;
