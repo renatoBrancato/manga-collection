@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { MangaItem } from "@/lib/types";
 import CoverImage from "@/components/CoverImage";
+import ObiIcon from "@/components/ObiIcon";
 import EditItemModal from "@/components/EditItemModal";
 import ItemHistoryModal from "@/components/ItemHistoryModal";
 import DeleteItemDialog from "@/components/DeleteItemDialog";
@@ -496,8 +497,8 @@ export default function ItemsTable({
                       </span>
                     )}
                     {item.has_obi === true && (
-                      <span title="Fascetta OBI presente" className="text-sm">
-                        🎗️
+                      <span title="Fascetta OBI presente" className="text-amber-300">
+                        <ObiIcon className="h-[15px] w-[15px]" />
                       </span>
                     )}
                   </span>
