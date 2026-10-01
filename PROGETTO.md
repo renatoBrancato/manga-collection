@@ -352,9 +352,13 @@ Quando si incolla un link su WhatsApp, Telegram o X, l'anteprima nasce dai tag
 `og:*` della pagina. Prima mancava `og:image`, quindi comparivano solo titolo e
 dominio.
 
-- **Landing (`/`)**: immagine statica `public/og.jpg` (1200×630, ~120 KB).
+- **Landing (`/`)**: immagine statica `public/og.jpg` (1200×630, ~45 KB).
   È un JPEG e non un PNG generato al volo perché WhatsApp scarta le anteprime
-  troppo pesanti: lo stesso disegno in PNG superava i 500 KB.
+  troppo pesanti. La sorgente è `src/app/opengraph-image.tsx`: si rigenera con
+  `curl -s -o /tmp/og.png http://localhost:3000/opengraph-image` seguito da
+  `sips -s format jpeg -s formatOptions 80 /tmp/og.png --out public/og.jpg`.
+  Il contenuto sta tutto nel quadrato centrale (630×630) perché WhatsApp
+  ritaglia così le anteprime piccole: testo troppo largo verrebbe tagliato.
 - **Collezione condivisa (`/c/[slug]`)**: `src/app/c/[slug]/opengraph-image.tsx`
   genera l'immagine con `next/og` leggendo i dati reali (nome del proprietario,
   numero di volumi, serie diverse, valore stimato), più `generateMetadata` per
