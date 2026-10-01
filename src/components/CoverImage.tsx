@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { MangaItem } from "@/lib/types";
 import { getCoverCandidates } from "@/lib/covers";
 
@@ -36,7 +36,15 @@ export default function CoverImage({
 }) {
   const candidates = useMemo(() => getCoverCandidates(item), [item]);
   const [index, setIndex] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
   const src = candidates[index];
+
+  // Un'immagine gia' in cache puo' completarsi prima che React agganci
+  // onLoad: senza questo controllo lo scheletro resterebbe per sempre.
+  useEffect(() => {
+    if (imgRef.current?.complete) setLoaded(true);
+  }, [src]);
 
   if (!src) {
     return (
@@ -51,14 +59,28 @@ export default function CoverImage({
   }
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={src}
-      alt={item.title}
-      loading="lazy"
-      decoding="async"
-      className={`object-cover ${className}`}
-      onError={() => setIndex((i) => i + 1)}
-    />
+    <div className={`relative overflow-hidden bg-slate-800/60 ${className}`}>
+      {!loaded && (
+        <div aria-hidden="true" className="cover-skeleton absolute inset-0">
+          <span className="absolute inset-0 flex items-center justify-center text-xl opacity-30">📖</span>
+        </div>
+      )}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        ref={imgRef}
+        src={src}
+        alt={item.title}
+        loading="lazy"
+        decoding="async"
+        className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${
+          loaded ? "opacity-100" : "opacity-0"
+        }`}
+        onLoad={() => setLoaded(true)}
+        onError={() => {
+          setLoaded(false);
+          setIndex((i) => i + 1);
+        }}
+      />
+    </div>
   );
 }

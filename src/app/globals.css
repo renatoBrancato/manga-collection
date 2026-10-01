@@ -144,3 +144,28 @@ body {
     stroke-dashoffset: 0;
   }
 }
+
+/* Scheletro della copertina: resta finche' l'immagine non e' davvero
+   caricata, cosi' la griglia non "scatta" durante il lazy loading. */
+.cover-skeleton {
+  background-image: linear-gradient(
+    110deg,
+    rgb(30 41 59) 30%,
+    rgb(51 65 85) 48%,
+    rgb(30 41 59) 66%
+  );
+  background-size: 250% 100%;
+  animation: cover-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes cover-shimmer {
+  to {
+    background-position: -250% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cover-skeleton {
+    animation: none;
+  }
+}
