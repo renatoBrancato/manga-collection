@@ -345,3 +345,21 @@ copertine mostrano la variazione percentuale e l'ordinamento ha
 `item_value_trends(p_user)`, che restituisce per ogni pezzo solo i punti in
 cui il valore è cambiato. La variazione parte dal valore valido a inizio
 periodo, o dal primo prezzo se il pezzo è stato aggiunto dopo.
+
+## Anteprime dei link (Open Graph)
+
+Quando si incolla un link su WhatsApp, Telegram o X, l'anteprima nasce dai tag
+`og:*` della pagina. Prima mancava `og:image`, quindi comparivano solo titolo e
+dominio.
+
+- **Landing (`/`)**: immagine statica `public/og.jpg` (1200×630, ~120 KB).
+  È un JPEG e non un PNG generato al volo perché WhatsApp scarta le anteprime
+  troppo pesanti: lo stesso disegno in PNG superava i 500 KB.
+- **Collezione condivisa (`/c/[slug]`)**: `src/app/c/[slug]/opengraph-image.tsx`
+  genera l'immagine con `next/og` leggendo i dati reali (nome del proprietario,
+  numero di volumi, serie diverse, valore stimato), più `generateMetadata` per
+  titolo e descrizione. `params` è una Promise: va atteso, altrimenti escono
+  tutti zero.
+- `metadataBase` in `src/app/layout.tsx` rende assoluti gli URL delle immagini.
+- Il middleware lascia passare i percorsi `opengraph-image`/`twitter-image`:
+  altrimenti rispondeva 307 verso `/login` e i crawler non vedevano nulla.

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import ItemsTable from "@/components/ItemsTable";
@@ -17,6 +18,37 @@ import type { MangaItem } from "@/lib/types";
  * pattern already used by /api/mcp and /api/collection - so no RLS changes
  * or anon-facing policies are needed. Never renders any mutation controls.
  */
+/**
+ * Titolo e descrizione per le anteprime dei link (WhatsApp, Telegram, X):
+ * senza questi, la collezione condivisa erediterebbe il titolo generico.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const admin = createAdminClient();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("display_name, share_enabled")
+    .eq("share_slug", slug)
+    .maybeSingle();
+
+  if (!profile?.share_enabled) return { title: "Collezione non disponibile" };
+
+  const owner = profile.display_name?.trim() || "un collezionista";
+  const title = `La collezione di ${owner}`;
+  const description = "Tankōbon e Shonen Jump catalogati e valutati su Manga Collection.";
+
+  return {
+    title,
+    description,
+    openGraph: { type: "website", url: `/c/${slug}`, title, description, siteName: "Manga Collection" },
+    twitter: { card: "summary_large_image", title, description },
+  };
+}
+
 export default async function SharedCollectionPage({
   params,
 }: {

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { siteUrl } from "@/lib/site-url";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,8 +14,24 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl()),
   title: "Manga Collection",
   description: "Registra e valuta la tua collezione di tankōbon e Shonen Jump",
+  openGraph: {
+    type: "website",
+    siteName: "Manga Collection",
+    locale: "it_IT",
+    url: "/",
+    images: [{ url: "/og.jpg", width: 1200, height: 630, alt: "Manga Collection" }],
+    title: "Manga Collection",
+    description: "Registra e valuta la tua collezione di tankōbon e Shonen Jump",
+  },
+  twitter: {
+    card: "summary_large_image",
+    images: ["/og.jpg"],
+    title: "Manga Collection",
+    description: "Registra e valuta la tua collezione di tankōbon e Shonen Jump",
+  },
 };
 
 export const viewport: Viewport = {
