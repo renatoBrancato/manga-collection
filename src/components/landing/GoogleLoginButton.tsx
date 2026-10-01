@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { authRedirectOrigin } from "@/lib/site-url";
 
 /** Pulsante di accesso con Google, in stile "vignetta" della landing. */
 export default function GoogleLoginButton({
@@ -12,15 +13,19 @@ export default function GoogleLoginButton({
   variant?: "ink" | "paper";
 }) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function signIn() {
     setLoading(true);
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
     const { error } = await createClient().auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${siteUrl}/api/auth/callback` },
+      options: { redirectTo: `${authRedirectOrigin()}/api/auth/callback` },
     });
-    if (error) setLoading(false);
+    if (error) {
+      console.error("[login] signInWithOAuth:", error.message);
+      setError(error.message);
+      setLoading(false);
+    }
   }
 
   const palette =
@@ -29,6 +34,7 @@ export default function GoogleLoginButton({
       : "bg-white text-[#111] hover:bg-[#ffe600]";
 
   return (
+    <span className="inline-flex flex-col items-start gap-2">
     <button
       type="button"
       onClick={signIn}
@@ -46,5 +52,11 @@ export default function GoogleLoginButton({
         ▶
       </span>
     </button>
+    {error && (
+      <span role="alert" className="border-2 border-[#111] bg-[#ffe600] px-2 py-1 text-xs font-bold normal-case">
+        Accesso non riuscito: {error}
+      </span>
+    )}
+    </span>
   );
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { siteUrl } from "@/lib/site-url";
 import RegenerateKeyButton from "@/components/RegenerateKeyButton";
 
 export default async function SettingsPage() {
@@ -16,7 +17,7 @@ export default async function SettingsPage() {
     .eq("id", user.id)
     .single();
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://tuo-dominio.vercel.app";
+  const mcpBaseUrl = siteUrl();
   const apiKey = profile?.api_key ?? "";
 
   return (
@@ -48,7 +49,7 @@ export default async function SettingsPage() {
           <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm text-slate-300">
             <li>Su chatgpt.com apri <strong>Impostazioni → App e connettori</strong> (potrebbe servire attivare prima la &quot;Developer mode&quot; nelle impostazioni avanzate).</li>
             <li>Clicca <strong>Crea/Aggiungi connettore</strong> e inserisci come URL:{" "}
-              <code className="text-emerald-400">{siteUrl}/api/mcp</code>
+              <code className="text-emerald-400">{mcpBaseUrl}/api/mcp</code>
             </li>
             <li>
               Come autenticazione scegli <strong>API Key / Bearer token</strong> e incolla la tua API key
