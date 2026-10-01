@@ -10,6 +10,7 @@ import ShareButton from "@/components/ShareButton";
 import AiChatPanel from "@/components/AiChatPanel";
 import CollectionHero from "@/components/CollectionHero";
 import CollectionValueChart from "@/components/CollectionValueChart";
+import DashboardRecovery from "@/components/DashboardRecovery";
 import { loadCollectionHistory } from "@/lib/history";
 import type { MangaItem } from "@/lib/types";
 
@@ -21,11 +22,16 @@ export default async function DashboardPage() {
 
   if (!user) redirect("/login");
 
-  const [{ data: items }, { data: profile }, history] = await Promise.all([
-    supabase.from("items").select("*").order("created_at", { ascending: false }),
+  const [itemsResult, { data: profile }, history] = await Promise.all([
+    loadItems(supabase, user.id),
     supabase.from("profiles").select("share_enabled, share_slug").eq("id", user.id).single(),
     loadCollectionHistory(supabase, user.id),
   ]);
+  const items = itemsResult.items;
+  const failed = itemsResult.failed;
+  // Collezione vuota ma lo storico (che non passa da RLS) dice che oggi vale
+  // qualcosa: quasi sempre è una lettura fatta senza sessione valida.
+  const suspicious = !failed && items.length === 0 && (history.at(-1)?.value ?? 0) > 0;
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-slate-50 sm:px-8">
@@ -53,7 +59,9 @@ export default async function DashboardPage() {
         }
       />
 
-      <KpiBar items={(items ?? []) as MangaItem[]} />
+      <DashboardRecovery failed={failed} suspicious={suspicious} />
+
+      {!failed && <KpiBar items={items} />}
 
       <CollectionValueChart points={history} />
 
@@ -61,8 +69,29 @@ export default async function DashboardPage() {
         <AddItemForm userId={user.id} />
       </div>
 
-      <ItemsTable items={(items ?? []) as MangaItem[]} />
+      {!failed && <ItemsTable items={items} />}
       <AiChatPanel userId={user.id} />
     </main>
   );
+}
+
+/**
+ * Legge la collezione con un paio di tentativi: un errore di rete o una
+ * sessione in rinnovo non deve trasformarsi in una dashboard vuota.
+ */
+async function loadItems(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+): Promise<{ items: MangaItem[]; failed: boolean }> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { data, error } = await supabase
+      .from("items")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+    if (!error) return { items: (data ?? []) as MangaItem[], failed: false };
+    console.error(`[dashboard] lettura collezione fallita (tentativo ${attempt + 1}):`, error.message);
+    await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+  }
+  return { items: [], failed: true };
 }
