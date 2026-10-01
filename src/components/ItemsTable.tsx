@@ -8,6 +8,8 @@ import CoverImage from "@/components/CoverImage";
 import EditItemModal from "@/components/EditItemModal";
 import ItemHistoryModal from "@/components/ItemHistoryModal";
 import DeleteItemDialog from "@/components/DeleteItemDialog";
+import StockList, { ChangeBadge } from "@/components/StockList";
+import { type ItemTrends, type TrendPeriod, TREND_PERIODS, itemChange } from "@/lib/trends";
 
 const FORMAT_LABELS: Record<string, string> = {
   tankobon: "Tankobon",
@@ -24,8 +26,19 @@ function formatCondition(item: MangaItem): string {
 }
 
 const PAGE_SIZE = 48;
+const VIEW_KEY = "manga-collection:view";
 
-export default function ItemsTable({ items, readOnly = false }: { items: MangaItem[]; readOnly?: boolean }) {
+type ViewMode = "grid" | "list";
+
+export default function ItemsTable({
+  items,
+  trends = {},
+  readOnly = false,
+}: {
+  items: MangaItem[];
+  trends?: ItemTrends;
+  readOnly?: boolean;
+}) {
   const supabase = createClient();
   const router = useRouter();
   const [formatFilter, setFormatFilter] = useState<string>("all");
@@ -42,6 +55,43 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
   const [editingItem, setEditingItem] = useState<MangaItem | null>(null);
   const [historyItem, setHistoryItem] = useState<MangaItem | null>(null);
   const [deletingItem, setDeletingItem] = useState<MangaItem | null>(null);
+  const [view, setView] = useState<ViewMode>("grid");
+  const [period, setPeriod] = useState<TrendPeriod>("30");
+
+  // Vista e periodo restano quelli scelti l'ultima volta (anche nella vista
+  // pubblica). Letti dopo il mount per non rompere l'idratazione.
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      try {
+        const saved = JSON.parse(localStorage.getItem(VIEW_KEY) ?? "{}") as { view?: ViewMode; period?: TrendPeriod };
+        if (saved.view === "grid" || saved.view === "list") setView(saved.view);
+        if (TREND_PERIODS.some((option) => option.key === saved.period)) setPeriod(saved.period as TrendPeriod);
+      } catch {
+        localStorage.removeItem(VIEW_KEY);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function updateView(next: { view?: ViewMode; period?: TrendPeriod }) {
+    const merged = { view: next.view ?? view, period: next.period ?? period };
+    setView(merged.view);
+    setPeriod(merged.period);
+    localStorage.setItem(VIEW_KEY, JSON.stringify(merged));
+  }
+
+  const changes = useMemo(() => {
+    const result = new Map<string, number | null>();
+    for (const item of items) {
+      const change = itemChange(trends[item.id], item.estimated_value, period);
+      result.set(item.id, change ? (change.percent ?? (change.delta > 0 ? Infinity : change.delta < 0 ? -Infinity : 0)) : null);
+    }
+    return result;
+  }, [items, trends, period]);
 
   const languages = useMemo(
     () =>
@@ -79,6 +129,12 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
       if (sort === "title") return (a.series ?? a.title).localeCompare(b.series ?? b.title, "it");
       if (sort === "value_desc") return (b.estimated_value ?? -1) - (a.estimated_value ?? -1);
       if (sort === "value_asc") return (a.estimated_value ?? Number.MAX_VALUE) - (b.estimated_value ?? Number.MAX_VALUE);
+      if (sort === "change_desc" || sort === "change_asc") {
+        const left = changes.get(a.id);
+        const right = changes.get(b.id);
+        if (left == null || right == null) return left == null ? (right == null ? 0 : 1) : -1;
+        return sort === "change_desc" ? right - left : left - right;
+      }
       if (sort === "year_desc") return (b.release_year ?? 0) - (a.release_year ?? 0);
       if (sort === "year_asc") return (a.release_year ?? Number.MAX_VALUE) - (b.release_year ?? Number.MAX_VALUE);
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -95,6 +151,7 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
     valueFilter,
     sort,
     search,
+    changes,
   ]);
 
   // Scorrimento infinito: filtri e totali lavorano su tutta la collezione, ma
@@ -178,6 +235,30 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
             <span className="rounded-full bg-white/5 px-3 py-1 text-slate-400">
               {filtered.length} di {items.length}
             </span>
+            <div role="group" aria-label="Vista" className="flex rounded-lg border border-slate-700 bg-slate-950 p-0.5">
+              {(
+                [
+                  ["grid", "Copertine", "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"],
+                  ["list", "Borsa", "M3 17l6-6 4 4 8-8M15 7h6v6"],
+                ] as const
+              ).map(([key, label, icon]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => updateView({ view: key })}
+                  aria-pressed={view === key}
+                  title={key === "grid" ? "Vista a copertine" : "Vista borsa: valore e variazioni"}
+                  className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                    view === key ? "bg-indigo-500 text-white" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5" aria-hidden="true">
+                    <path d={icon} strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -266,6 +347,8 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
               <option value="year_asc">Anno: più vecchi</option>
               <option value="value_desc">Valore: decrescente</option>
               <option value="value_asc">Valore: crescente</option>
+              <option value="change_desc">Variazione: rialzi</option>
+              <option value="change_asc">Variazione: ribassi</option>
             </select>
           </label>
         </div>
@@ -340,12 +423,26 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
         )}
       </div>
 
+      {(view === "list" || sort.startsWith("change")) && filtered.length > 0 && (
+        <MarketSummary items={filtered} trends={trends} period={period} onPeriod={(key) => updateView({ period: key })} />
+      )}
+
       {filtered.length === 0 ? (
         <div className="rounded-xl border border-slate-800 px-4 py-10 text-center text-slate-500">
           {items.length === 0
             ? "La collezione è ancora vuota. Registra il primo pezzo o chiedi a Koma di farlo per te."
             : "Nessun pezzo corrisponde ai filtri selezionati."}
         </div>
+      ) : view === "list" ? (
+        <StockList
+          items={visible}
+          trends={trends}
+          period={period}
+          readOnly={readOnly}
+          onOpen={setHistoryItem}
+          onEdit={setEditingItem}
+          onDelete={setDeletingItem}
+        />
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
           {visible.map((item) => (
@@ -437,9 +534,11 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
                         })
                       : "-"}
                   </span>
-                  <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-slate-500">
-                    <path d="M1 12l4-4 3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                  <ChangeBadge
+                    change={itemChange(trends[item.id], item.estimated_value, period)}
+                    currency={item.currency || "EUR"}
+                    compact
+                  />
                 </button>
               </div>
             </div>
@@ -467,6 +566,67 @@ export default function ItemsTable({ items, readOnly = false }: { items: MangaIt
         />
       )}
       {historyItem && <ItemHistoryModal item={historyItem} onClose={() => setHistoryItem(null)} />}
+    </div>
+  );
+}
+
+/** Barra in stile mercato: periodo, rialzi/ribassi e variazione complessiva. */
+function MarketSummary({
+  items,
+  trends,
+  period,
+  onPeriod,
+}: {
+  items: MangaItem[];
+  trends: ItemTrends;
+  period: TrendPeriod;
+  onPeriod: (period: TrendPeriod) => void;
+}) {
+  let up = 0;
+  let down = 0;
+  let from = 0;
+  let to = 0;
+  for (const item of items) {
+    const change = itemChange(trends[item.id], item.estimated_value, period);
+    if (!change) continue;
+    if (change.delta > 0.004) up++;
+    else if (change.delta < -0.004) down++;
+    from += change.from;
+    to += change.to;
+  }
+  const delta = to - from;
+  const percent = from > 0 ? (delta / from) * 100 : null;
+  const tone = delta > 0.004 ? "text-emerald-300" : delta < -0.004 ? "text-rose-300" : "text-slate-300";
+  const sign = delta > 0.004 ? "+" : delta < -0.004 ? "−" : "";
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-900/65 px-4 py-3 text-sm">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+        <span className="font-mono font-semibold tabular-nums">
+          <span className="mr-2 text-xs font-sans font-medium uppercase tracking-wider text-slate-500">Variazione</span>
+          <span className={tone}>
+            {sign}
+            {Math.abs(delta).toLocaleString("it-IT", { style: "currency", currency: "EUR" })}
+            {percent != null && ` (${sign}${Math.abs(percent).toLocaleString("it-IT", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}%)`}
+          </span>
+        </span>
+        <span className="text-emerald-300">▲ {up} in rialzo</span>
+        <span className="text-rose-300">▼ {down} in ribasso</span>
+      </div>
+      <div role="group" aria-label="Periodo" className="flex rounded-lg border border-slate-700 bg-slate-950 p-0.5">
+        {TREND_PERIODS.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            onClick={() => onPeriod(option.key)}
+            aria-pressed={period === option.key}
+            className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
+              period === option.key ? "bg-white/10 text-white" : "text-slate-400 hover:text-white"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

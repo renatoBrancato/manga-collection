@@ -12,6 +12,7 @@ import CollectionHero from "@/components/CollectionHero";
 import CollectionValueChart from "@/components/CollectionValueChart";
 import DashboardRecovery from "@/components/DashboardRecovery";
 import { loadCollectionHistory } from "@/lib/history";
+import { loadItemTrends } from "@/lib/trends";
 import type { MangaItem } from "@/lib/types";
 
 export default async function DashboardPage() {
@@ -22,10 +23,11 @@ export default async function DashboardPage() {
 
   if (!user) redirect("/login");
 
-  const [itemsResult, { data: profile }, history] = await Promise.all([
+  const [itemsResult, { data: profile }, history, trends] = await Promise.all([
     loadItems(supabase, user.id),
     supabase.from("profiles").select("share_enabled, share_slug").eq("id", user.id).single(),
     loadCollectionHistory(supabase, user.id),
+    loadItemTrends(supabase, user.id),
   ]);
   const items = itemsResult.items;
   const failed = itemsResult.failed;
@@ -69,7 +71,7 @@ export default async function DashboardPage() {
         <AddItemForm userId={user.id} />
       </div>
 
-      {!failed && <ItemsTable items={items} />}
+      {!failed && <ItemsTable items={items} trends={trends} />}
       <AiChatPanel userId={user.id} />
     </main>
   );

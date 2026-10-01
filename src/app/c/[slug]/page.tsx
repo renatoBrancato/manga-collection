@@ -7,6 +7,7 @@ import CollectionHero from "@/components/CollectionHero";
 import DonateButton from "@/components/DonateButton";
 import CollectionValueChart from "@/components/CollectionValueChart";
 import { loadCollectionHistory } from "@/lib/history";
+import { loadItemTrends } from "@/lib/trends";
 import type { MangaItem } from "@/lib/types";
 
 /**
@@ -32,9 +33,10 @@ export default async function SharedCollectionPage({
 
   if (!profile || !profile.share_enabled) notFound();
 
-  const [{ data: items }, history] = await Promise.all([
+  const [{ data: items }, history, trends] = await Promise.all([
     admin.from("items").select("*").eq("user_id", profile.id).order("created_at", { ascending: false }),
     loadCollectionHistory(admin, profile.id),
+    loadItemTrends(admin, profile.id),
   ]);
 
   return (
@@ -56,7 +58,7 @@ export default async function SharedCollectionPage({
 
       <CollectionValueChart points={history} />
 
-      <ItemsTable items={(items ?? []) as MangaItem[]} readOnly />
+      <ItemsTable items={(items ?? []) as MangaItem[]} trends={trends} readOnly />
     </main>
   );
 }

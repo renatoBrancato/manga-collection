@@ -332,3 +332,16 @@ public/mcp/instructions.md  istruzioni comportamentali per l'LLM lato ChatGPT
       produzione dopo il prossimo push.
 - [ ] Valutare se serve un flusso di editing/cancellazione manuale dei
       volumi dalla dashboard (al momento probabilmente solo aggiunta).
+
+## Vista "Borsa"
+
+Nell'archivio si può passare dalla vista a copertine a una lista in stile
+mercato azionario (scelta salvata nel browser): ogni pezzo ha una sigla
+(es. `OP 1`, `WSJ 36-37`), una mini-sparkline, il valore e la variazione
+▲/▼ nel periodo scelto (1g, 7g, 30g, 1a, Tutto), più un riepilogo con la
+variazione complessiva e il numero di pezzi in rialzo/ribasso. Anche le
+copertine mostrano la variazione percentuale e l'ordinamento ha
+"Variazione: rialzi/ribassi". I dati arrivano dall'RPC
+`item_value_trends(p_user)`, che restituisce per ogni pezzo solo i punti in
+cui il valore è cambiato. La variazione parte dal valore valido a inizio
+periodo, o dal primo prezzo se il pezzo è stato aggiunto dopo.
