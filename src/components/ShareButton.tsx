@@ -29,20 +29,25 @@ export default function ShareButton({
   const [copied, setCopied] = useState(false);
   const [origin, setOrigin] = useState("");
   const [mobile, setMobile] = useState(false);
-  const [position, setPosition] = useState({ top: 0, right: 16 });
+  const [position, setPosition] = useState({ top: 0, left: 16, width: 320 });
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const shareUrl = slug && origin ? `${origin}/c/${slug}` : "";
 
+  // Il pannello parte allineato al bordo destro del pulsante, ma deve
+  // restare dentro la finestra: il pulsante Condividi sta a sinistra
+  // dell'hero, quindi senza limiti il pannello uscirebbe dallo schermo.
   function updatePopoverPosition() {
     const rect = buttonRef.current?.getBoundingClientRect();
     if (!rect) return;
     const isMobile = window.matchMedia("(max-width: 639px)").matches;
     setMobile(isMobile);
-    setPosition({
-      top: rect.bottom + 8,
-      right: Math.max(16, window.innerWidth - rect.right),
-    });
+    if (isMobile) return;
+
+    const margin = 16;
+    const width = Math.min(320, window.innerWidth - margin * 2);
+    const left = Math.min(Math.max(margin, rect.right - width), window.innerWidth - width - margin);
+    setPosition({ top: rect.bottom + 8, left, width });
   }
 
   function togglePopover() {
@@ -115,9 +120,9 @@ export default function ShareButton({
               aria-modal={mobile}
               aria-label="Condividi la collezione"
               className={`rounded-xl border border-slate-800 bg-slate-900 p-4 shadow-xl ${
-                mobile ? "w-full max-w-sm" : "fixed w-[min(20rem,calc(100vw-2rem))]"
+                mobile ? "w-full max-w-sm" : "fixed"
               }`}
-              style={!mobile ? { top: position.top, right: position.right } : undefined}
+              style={!mobile ? { top: position.top, left: position.left, width: position.width } : undefined}
             >
               {mobile && (
                 <div className="mb-3 flex items-center justify-between">
