@@ -1,6 +1,7 @@
 "use client";
 
 import type { MangaItem } from "@/lib/types";
+import ObiIcon from "@/components/ObiIcon";
 import { type ItemChange, type ItemTrends, type TrendPeriod, itemChange, sparklineValues } from "@/lib/trends";
 
 const FORMAT_LABELS: Record<string, string> = { tankobon: "Tankobon", zashi: "Zashi" };
@@ -121,7 +122,6 @@ export default function StockList({
             FORMAT_LABELS[item.format] ?? item.format,
             item.release_year,
             item.is_first_print === true ? "Prima stampa" : item.is_first_print === false ? "Ristampa" : null,
-            item.has_obi === true ? "OBI" : null,
             item.grading_authority
               ? `${item.grading_authority}${item.grading_value != null ? ` ${item.grading_value}` : ""}`
               : shortCondition(item.condition_estimate),
@@ -159,6 +159,15 @@ export default function StockList({
                     )}
                     {item.is_sealed && (
                       <span className="shrink-0 rounded bg-sky-500/15 px-1.5 py-px text-[9px] font-medium text-sky-300">Sealed</span>
+                    )}
+                    {item.has_obi === true && (
+                      <span
+                        title="Fascetta OBI presente"
+                        className="flex shrink-0 items-center gap-1 rounded bg-amber-400/15 px-1.5 py-px text-[9px] font-bold uppercase tracking-wider text-amber-300"
+                      >
+                        <ObiIcon className="h-2.5 w-2.5" />
+                        OBI
+                      </span>
                     )}
                   </p>
                   <p className="truncate text-xs text-slate-500">{details.join(" · ")}</p>
