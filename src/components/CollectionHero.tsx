@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Image from "next/image";
 
 /**
  * Header condiviso tra la dashboard e la vista pubblica in sola lettura.
@@ -47,8 +48,15 @@ export default function CollectionHero({
         )}
 
         <div>
-          <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-indigo-300">
-            <span className="h-px w-8 bg-indigo-400" />
+          <div className="mb-3 flex items-center gap-2.5 text-xs font-semibold uppercase tracking-[0.24em] text-indigo-300">
+            <Image
+              src="/logo.svg"
+              alt=""
+              width={38}
+              height={38}
+              priority
+              className="h-[38px] w-[38px] shrink-0 drop-shadow-[0_2px_6px_rgba(216,31,38,0.45)]"
+            />
             {eyebrow}
           </div>
           <h1 className="max-w-xl text-3xl font-black leading-tight text-white sm:text-4xl">
