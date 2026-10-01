@@ -53,15 +53,18 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
             <span className="text-[#e60012]">第1話</span> Capitolo 1
           </p>
           <h1 className={`${display.className} text-[2.6rem] leading-[1.02] sm:text-6xl lg:text-7xl`}>
-            La tua
+            Ogni volume
             <br />
-            collezione
+            ha la sua
             <br />
             <span className="relative inline-block">
-              <span className="relative z-10 text-[#e60012]">vale.</span>
+              <span className="relative z-10 text-[#e60012]">storia.</span>
               <span aria-hidden="true" className="absolute -bottom-1 left-0 right-0 h-4 -rotate-1 bg-[#ffe600]" />
             </span>
           </h1>
+          <p className="mt-3 inline-block -rotate-2 border-2 border-[#111] bg-white px-3 py-1 text-sm font-black uppercase tracking-wider shadow-[3px_3px_0_#111]">
+            …e anche un <span className="text-[#e60012]">prezzo</span>.
+          </p>
           <p className="mt-6 max-w-lg text-base font-medium leading-relaxed text-[#111]/80 sm:text-lg">
             Tankōbon, zashi di Shōnen Jump, prime stampe con OBI, pezzi gradati. Fotografali:{" "}
             <strong className="text-[#111]">Koma</strong> li riconosce, li cataloga e ti dice quanto valgono,
