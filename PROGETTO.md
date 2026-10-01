@@ -364,6 +364,9 @@ dominio.
   numero di volumi, serie diverse, valore stimato), più `generateMetadata` per
   titolo e descrizione. `params` è una Promise: va atteso, altrimenti escono
   tutti zero.
+- **Logo**: `public/logo.svg` (copia in `src/app/icon.svg`, che Next usa come
+  favicon). È un disegno originale — libro aperto, segnalibro e grafico in
+  salita — per non usare marchi altrui come lo sharingan di Naruto.
 - `metadataBase` in `src/app/layout.tsx` rende assoluti gli URL delle immagini.
 - Il middleware lascia passare i percorsi `opengraph-image`/`twitter-image`:
   altrimenti rispondeva 307 verso `/login` e i crawler non vedevano nulla.

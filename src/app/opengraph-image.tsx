@@ -13,8 +13,8 @@ export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 export default async function Image() {
-  const eye = await readFile(path.join(process.cwd(), "public", "sharingan.png"));
-  const eyeSrc = `data:image/png;base64,${eye.toString("base64")}`;
+  const logo = await readFile(path.join(process.cwd(), "public", "logo.svg"));
+  const logoSrc = `data:image/svg+xml;base64,${logo.toString("base64")}`;
 
   return new ImageResponse(
     (
@@ -31,7 +31,7 @@ export default async function Image() {
           color: "#f8fafc",
         }}
       >
-        <img src={eyeSrc} width={300} height={300} alt="" />
+        <img src={logoSrc} width={300} height={300} alt="" />
 
         <div
           style={{

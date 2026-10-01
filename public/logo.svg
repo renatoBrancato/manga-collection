@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="300" height="300" role="img" aria-label="Manga Collection">
+  <defs>
+    <radialGradient id="mcDisc" cx="40%" cy="32%" r="80%">
+      <stop offset="0%" stop-color="#f2585d"/>
+      <stop offset="55%" stop-color="#d81f26"/>
+      <stop offset="100%" stop-color="#8b0e16"/>
+    </radialGradient>
+  </defs>
+
+  <circle cx="150" cy="150" r="138" fill="#0a0a0f"/>
+  <circle cx="150" cy="150" r="126" fill="url(#mcDisc)"/>
+  <circle cx="150" cy="150" r="109" fill="none" stroke="#0a0a0f" stroke-width="3" opacity="0.2"/>
+
+  <g stroke="#0a0a0f" stroke-width="10" stroke-linejoin="round" fill="#fdf4f4">
+    <path d="M150 126 C128 110 100 106 72 110 L72 198 C100 194 128 198 150 214 Z"/>
+    <path d="M150 126 C172 110 200 106 228 110 L228 198 C200 194 172 198 150 214 Z"/>
+  </g>
+  <path d="M150 126 L150 214" stroke="#0a0a0f" stroke-width="9" stroke-linecap="round" fill="none"/>
+
+  <path d="M90 114 L116 112 L116 166 L103 155 L90 166 Z" fill="#0a0a0f"/>
+  <path d="M96 120 L110 119 L110 152 L103 146 L96 152 Z" fill="#d81f26"/>
+
+  <path d="M130 188 L152 166 L172 178 L198 138" fill="none" stroke="#0a0a0f" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M216 122 L186 128 L206 150 Z" fill="#0a0a0f"/>
+  <path d="M130 188 L152 166 L172 178 L196 141" fill="none" stroke="#d81f26" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M209 128 L191 131 L203 144 Z" fill="#d81f26"/>
+</svg>
