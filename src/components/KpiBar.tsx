@@ -1,5 +1,19 @@
 import type { MangaItem } from "@/lib/types";
 
+/**
+ * Icone a tratto disegnate a mano: le emoji rendono in modo diverso su ogni
+ * sistema e il kanji da solo non è leggibile per chi non conosce il giapponese.
+ */
+const icon = {
+  stack: "M4 8.2 12 4.6l8 3.6-8 3.6-8-3.6Z M4.2 12.4 12 15.9l7.8-3.5 M4.2 16.4 12 19.9l7.8-3.5",
+  coins: "M12 6.6c3.3 0 6 .9 6 2.1s-2.7 2.1-6 2.1-6-.9-6-2.1 2.7-2.1 6-2.1Z M6 8.7v6.6c0 1.2 2.7 2.1 6 2.1s6-.9 6-2.1V8.7 M6 12c0 1.2 2.7 2.1 6 2.1s6-.9 6-2.1",
+  folders: "M4 8.5h5.4l1.4 1.8H20v8.2H4V8.5Z M7 8.5V5.7h4.6l1.4 1.8H18",
+  book: "M12 7.4C10.2 5.9 7.7 5.4 4.6 5.7v11.6c3.1-.3 5.6.2 7.4 1.7 1.8-1.5 4.3-2 7.4-1.7V5.7c-3.1-.3-5.6.2-7.4 1.7Z M12 7.4v11.6",
+  medal: "M8.6 3.4 10.8 7.6 M15.4 3.4 13.2 7.6 M12 21a6.6 6.6 0 1 0 0-13.2A6.6 6.6 0 0 0 12 21Z M9.2 14.4l2 2 3.6-3.8",
+  sparkle: "M12 3.6 13.9 9 19.4 10.9 13.9 12.8 12 18.2 10.1 12.8 4.6 10.9 10.1 9 12 3.6Z M18.6 16.4 19.4 18.6 21.6 19.4 19.4 20.2 18.6 22.4 17.8 20.2 15.6 19.4 17.8 18.6 18.6 16.4Z",
+  ribbon: "M6.4 3.6h11.2v16.8H6.4V3.6Z M3.4 14.2h17.2v4.2H3.4v-4.2Z",
+  crown: "M4.6 18.6h14.8 M4 7.2l3.8 3.4L12 5l4.2 5.6L20 7.2l-1.4 8.6H5.4L4 7.2Z",
+};
 function formatCurrency(value: number) {
   return value.toLocaleString("it-IT", { style: "currency", currency: "EUR" });
 }
@@ -31,16 +45,17 @@ export default function KpiBar({ items }: { items: MangaItem[] }) {
   ).sort((a, b) => b[1] - a[1])[0];
 
   const kpis = [
-    { label: "Volumi totali", kana: "総数", kanji: "冊", value: total.toString() },
-    { label: "Valore stimato", kana: "評価額", kanji: "円", value: formatCurrency(totalValue), accent: true },
-    { label: "Serie diverse", kana: "作品", kanji: "作", value: series.toString() },
-    { label: "Tankobon / Zashi", kana: "単行本・雑誌", kanji: "単", value: `${tankobon} / ${zashi}` },
-    { label: "Pezzi gradati", kana: "鑑定済み", kanji: "鑑", value: graded.toString() },
-    { label: "Prima stampa", kana: "初版", kanji: "初", value: firstPrints.toString() },
+    { label: "Volumi totali", kana: "総数", kanji: "冊", path: icon.stack, value: total.toString() },
+    { label: "Valore stimato", kana: "評価額", kanji: "円", path: icon.coins, value: formatCurrency(totalValue), accent: true },
+    { label: "Serie diverse", kana: "作品", kanji: "作", path: icon.folders, value: series.toString() },
+    { label: "Tankobon / Zashi", kana: "単行本・雑誌", kanji: "単", path: icon.book, value: `${tankobon} / ${zashi}` },
+    { label: "Pezzi gradati", kana: "鑑定済み", kanji: "鑑", path: icon.medal, value: graded.toString() },
+    { label: "Prima stampa", kana: "初版", kanji: "初", path: icon.sparkle, value: firstPrints.toString() },
     {
       label: "Con OBI / Senza",
       kana: "帯あり・なし",
       kanji: "帯",
+      path: icon.ribbon,
       value: `${withObi} / ${withoutObi}`,
       hint: obiUnknown > 0 ? `${obiUnknown} con OBI non specificato` : undefined,
     },
@@ -48,6 +63,7 @@ export default function KpiBar({ items }: { items: MangaItem[] }) {
       label: "Serie più numerosa",
       kana: "最多作品",
       kanji: "王",
+      path: icon.crown,
       value: topSeriesEntry ? `${topSeriesEntry[0]} (${topSeriesEntry[1]})` : "-",
     },
   ];
@@ -74,11 +90,24 @@ export default function KpiBar({ items }: { items: MangaItem[] }) {
 
           <div className="flex items-center gap-1.5">
             <span
-              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] text-[12px] font-bold leading-none ${
-                kpi.accent ? "bg-rose-600 text-white" : "bg-slate-100/10 text-slate-300"
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+                kpi.accent ? "bg-rose-600/90 text-white" : "bg-slate-100/10 text-slate-300"
               }`}
             >
-              {kpi.kanji}
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-4 w-4"
+                aria-hidden="true"
+              >
+                {kpi.path.split(" M").map((d, i) => (
+                  <path key={d} d={i === 0 ? d : `M${d}`} />
+                ))}
+              </svg>
             </span>
             <span className="truncate text-[10px] tracking-wide text-slate-500">{kpi.kana}</span>
           </div>
