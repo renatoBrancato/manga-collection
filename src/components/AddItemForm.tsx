@@ -80,8 +80,8 @@ export default function AddItemForm({ userId }: { userId: string }) {
             </svg>
           </span>
           <span>
-            <span className="block font-semibold text-white">Nuovo pezzo</span>
-            <span className="mt-0.5 block text-xs text-slate-400">Inserisci volume o rivista nella collezione</span>
+            <span className="block font-semibold text-white">Inserisci volume manualmente</span>
+            <span className="mt-0.5 block text-xs text-slate-400">Altrimenti chiedi a Koma</span>
           </span>
         </span>
         <svg
