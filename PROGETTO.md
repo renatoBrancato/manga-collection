@@ -150,14 +150,20 @@ bucket `covers` e passa a OpenAI il relativo URL pubblico.
 
 Prima della conversazione vera e propria le foto passano da una **lettura
 dedicata** (una chiamata senza tool con output JSON strutturato) che elenca i
-pezzi distinti: serie dal logo, numero di volume copiato com'è stampato e
-convertito (巻四十 → 40), testo dell'OBI tenuto separato dal titolo, sealed,
-grading, stato e foto di copertina. Il modello della chat la riceve come
-fonte primaria e le foto gli arrivano a bassa risoluzione solo come
-riscontro; i pezzi letti diventano l'elenco di quelli attesi, e il turno non
-si chiude finché non sono stati tutti proposti (con giri extra in base al
-numero di pezzi). Se la lettura fallisce, la chat analizza le foto in alta
-risoluzione come prima.
+pezzi distinti: trascrizione letterale del titolo principale nella scrittura
+originale, nome canonico della serie, numero di volume copiato com'è stampato
+e convertito (巻四十 → 40), testo dell'OBI tenuto separato dal titolo,
+sealed, grading, stato e foto di copertina. Prima di aggiungere da una foto,
+Koma deve cercare sul web il titolo trascritto insieme al volume e verificare
+che il nome canonico corrisponda allo stesso logo: una ricerca prezzi non
+sostituisce questo controllo. Se non c'è una corrispondenza affidabile, non
+salva un nome ipotetico e chiede di chiarire; se il logo non è leggibile non
+aggiunge un singolo pezzo con un titolo indovinato. Il modello della chat
+riceve la lettura come fonte primaria e le foto gli arrivano a bassa
+risoluzione solo come riscontro; i pezzi letti diventano l'elenco di quelli
+attesi, e il turno non si chiude finché non sono stati tutti proposti (con
+giri extra in base al numero di pezzi). Se la lettura fallisce, la chat
+analizza le foto in alta risoluzione come prima.
 
 Con più foto, ciascuna è preceduta dall'etichetta "Foto N" e Koma distingue
 due casi: **stesso pezzo** da più lati (copertina, retro, colophon, angoli) →

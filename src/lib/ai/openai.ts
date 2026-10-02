@@ -259,6 +259,12 @@ Prima di aggiungere:
 - usa search_collection per verificare che non esista già lo stesso pezzo;
 - usa web_search per completare i metadati pubblici dell'edizione esatta:
   anno di uscita, editore, lingua, ISBN e altri dati reperibili;
+- se il pezzo viene da una foto, cerca prima il testo letterale del logo
+  trascritto in cover_title_text insieme al volume; poi verifica che il nome
+  canonico da salvare identifichi proprio quel titolo. Non usare solo il nome
+  traslitterato proposto dalla lettura visiva e non confondere titolo, autore
+  e testo dell'OBI. Se le fonti non confermano la corrispondenza, non salvare
+  un nome ipotetico: chiedi all'utente di chiarire il titolo;
 - non lasciare questi campi vuoti solo perché non sono scritti nel messaggio:
   cercali online, usando foto, serie, numero ed edizione per disambiguare.
 
@@ -624,6 +630,7 @@ type PhotoPiece = {
   photos: number[];
   cover_photo: number | null;
   series: string;
+  cover_title_text: string | null;
   volume_text: string | null;
   volume_number: number | null;
   issue_number: string | null;
@@ -649,13 +656,14 @@ const photoReadingSchema = {
         type: "object",
         additionalProperties: false,
         required: [
-          "photos", "cover_photo", "series", "volume_text", "volume_number", "issue_number", "year", "format", "has_obi",
+          "photos", "cover_photo", "series", "cover_title_text", "volume_text", "volume_number", "issue_number", "year", "format", "has_obi",
           "obi_text", "is_sealed", "graded", "grading_authority", "grading_value", "condition",
         ],
         properties: {
           photos: { type: "array", items: { type: "integer" } },
           cover_photo: { type: ["integer", "null"] },
-          series: { type: "string" },
+          series: { type: "string", description: "Nome canonico dell'opera, non testo promozionale dell'obi" },
+          cover_title_text: { type: ["string", "null"], description: "Titolo principale trascritto dalla copertina nella scrittura originale" },
           volume_text: { type: ["string", "null"] },
           volume_number: { type: ["integer", "null"] },
           issue_number: { type: ["string", "null"] },
@@ -676,7 +684,8 @@ const photoReadingSchema = {
 
 const photoReadingInstructions = `Sei un esperto di manga giapponesi. Elenca i pezzi fisici distinti mostrati nelle foto: più foto dello stesso volume (copertina, retro, dorso, colophon, angoli) sono UN pezzo; una foto con più volumi sono più pezzi.
 Per ciascun pezzo:
-- series: il LOGO principale della copertina (o il nome della rivista per gli zashi);
+- cover_title_text: trascrivi il titolo del LOGO principale della copertina nella scrittura originale, rispettando i caratteri visibili (es. 極楽街); non tradurlo, non ricostruirlo dal testo promozionale e non includere frasi dell'OBI. Se il logo non è leggibile, null;
+- series: nome canonico dell'opera corrispondente al logo principale, in romaji/inglese quando identificabile. Non usare il testo dell'OBI per completare o indovinare il nome: se il logo non è leggibile, lascia la serie vuota;
 - volume_text: la scritta del numero di volume COPIATA esattamente come stampata (es. 巻四十, 巻ノ六十, 第23巻, 1), di solito piccola vicino al logo o sul dorso; volume_number: la sua conversione in cifre (四十=40, 六十=60, 百五=105);
 - zashi (riviste): series = nome della rivista in romaji/inglese (週刊少年ジャンプ → "Weekly Shonen Jump"); issue_number = numero del fascicolo come stampato (es. "36・37号" → "36-37"), di solito piccolo in basso a sinistra ("No.36・37"): leggilo cifra per cifra, 5/6 e 3/8 si confondono facilmente; i numeri doppi (合併号) sono SEMPRE consecutivi, quindi "35・37" è impossibile: se le cifre non sono consecutive rileggi, e se resti incerto metti la lettura più probabile e segnalalo in notes; year = anno del fascicolo SOLO se stampato e leggibile in copertina (es. "2025年", data di uscita), altrimenti null: non dedurlo dal contenuto. volume_number null;
 - tankōbon: issue_number e year null;
@@ -761,8 +770,9 @@ export async function runCollectionChat({
     content.push({
       type: "input_text",
       text:
-        "\n\nLETTURA DELLE FOTO (passaggio di visione dedicato: usala come fonte primaria per serie, " +
-        "volume_number, OBI, sealed, grading, stato e cover_photo; un elemento = un pezzo):\n" +
+        "\n\nLETTURA DELLE FOTO (passaggio di visione dedicato: cover_title_text è la trascrizione letterale " +
+        "del logo originale e va verificata sul web prima di normalizzare/salvare series; usa anche i campi " +
+        "per volume_number, OBI, sealed, grading, stato e cover_photo; un elemento = un pezzo):\n" +
         JSON.stringify(photoPieces),
     });
   }
@@ -929,13 +939,45 @@ export async function runCollectionChat({
         let result: Awaited<ReturnType<typeof executeTool>>;
         try {
           const args = JSON.parse(call.arguments || "{}") as Record<string, unknown>;
+          const requestedCoverPhoto = typeof args.cover_photo === "number" ? args.cover_photo : null;
+          const exactCoverMatch =
+            requestedCoverPhoto === null
+              ? []
+              : photoPieces?.filter((piece) => piece.cover_photo === requestedCoverPhoto) ?? [];
+          const matchingPhotoPieces =
+            exactCoverMatch.length > 0
+              ? exactCoverMatch
+              : photoPieces?.filter((piece) =>
+                  typeof args.volume_number === "number" &&
+                  piece.volume_number === args.volume_number &&
+                  normalizeSeries(piece.series) === normalizeSeries(args.series)
+                ) ?? [];
+          const photoPiece =
+            matchingPhotoPieces.length === 1
+              ? matchingPhotoPieces[0]
+              : photoPieces?.length === 1
+                ? photoPieces[0]
+                : undefined;
 
-          if (call.name === "prepare_add_manga" && requiresWebResearch && !usedWebSearch && !usedPriceLookup) {
+          if (call.name === "prepare_add_manga" && requiresWebResearch && !usedWebSearch) {
             result = {
               output: JSON.stringify({
-                error: "Dati non ancora verificati",
+                error: "Metadati dell'edizione non ancora verificati",
                 instruction:
-                  "Usa prima lookup_market_price per il valore e, se servono, web_search per i metadati pubblici. Poi richiama lo stesso tool con i dati arricchiti.",
+                  "Prima di aggiungere, cerca sul web l'edizione usando il titolo originale trascritto dalla copertina (cover_title_text) e il numero del volume. Verifica che la serie canonica corrisponda davvero al logo, non all'OBI o a un testo promozionale. La ricerca prezzi non sostituisce questa verifica. Se non trovi una corrispondenza affidabile o emergono titoli diversi plausibili, chiedi conferma all'utente; altrimenti richiama prepare_add_manga con i metadati verificati.",
+              }),
+            };
+          } else if (
+            call.name === "prepare_add_manga" &&
+            imageUrls.length > 0 &&
+            photoPiece &&
+            !photoPiece.cover_title_text?.trim()
+          ) {
+            result = {
+              output: JSON.stringify({
+                error: "Titolo della copertina non leggibile",
+                instruction:
+                  "Non aggiungere il pezzo con un nome indovinato. Chiedi all'utente di trascrivere il titolo principale del logo oppure di inviare una foto più nitida della copertina.",
               }),
             };
           } else if (
