@@ -22,6 +22,20 @@ const RAW_SALES_SAMPLE_SIZE = 10;
 const RAW_RECENT_WINDOW_MS = 365 * 24 * 60 * 60 * 1000;
 const RAW_MIN_RECENT_SALES = 3;
 
+export type RawPrintEvidence = "first_print" | "reprint" | "unknown";
+
+const FIRST_PRINT_TITLE =
+  /\b(?:1st|first)\s*print(?:ing)?\b|初版|初刷|第[１1]刷|第一刷/i;
+const REPRINT_TITLE =
+  /\b(?:2nd|second|3rd|third|(?!1st\b)\d+(?:st|nd|rd|th))\s*print(?:ing)?\b|\b(?:2nd|second|3rd|third|(?!1st\b)\d+(?:st|nd|rd|th))\s*edition\b|\breprint(?:ed)?\b|重版|再版|第(?:[2-9]\d*|十[一二三四五六七八九]?|[二三四五六七八九](?:十[一二三四五六七八九]?)?)刷|第(?:[2-9]\d*|十[一二三四五六七八九]?|[二三四五六七八九](?:十[一二三四五六七八九]?)?)版/i;
+
+export function classifyRawPrintEvidence(title: string | null | undefined): RawPrintEvidence {
+  const normalized = (title ?? "").normalize("NFKC");
+  if (REPRINT_TITLE.test(normalized)) return "reprint";
+  if (FIRST_PRINT_TITLE.test(normalized)) return "first_print";
+  return "unknown";
+}
+
 type TrackerIndex = {
   updated_at?: string;
   datasets: Record<string, Record<string, string>>;
@@ -268,7 +282,7 @@ export type PriceLookupInput = {
   year?: number | null;
   /** Lingua dell'edizione: West Blue copre solo quella giapponese. */
   language?: string | null;
-  /** Solo per il fallback eBay dei tankōbon. */
+  /** Prima stampa/ristampa nota: filtra i RAW West Blue e il fallback eBay. */
   isFirstPrint?: boolean | null;
   isSpecialEdition?: boolean;
 };
@@ -288,6 +302,8 @@ export type PriceLookupResult = {
     obi: "Yes" | "No" | "unknown";
     issue?: string | null;
     year?: number | null;
+    language?: string | null;
+    is_first_print?: boolean | null;
   };
   matched_rows: Array<{
     title?: string;
@@ -296,6 +312,8 @@ export type PriceLookupResult = {
     obi?: string | null;
     price_usd?: number | null;
     sold_date?: string | null;
+    language?: string | null;
+    print_evidence?: RawPrintEvidence;
   }>;
   match_count: number;
   usd_eur_rate: number;
@@ -309,8 +327,8 @@ export type PriceLookupResult = {
  *
  * Per i graded restituisce la riga esatta con stesso volume/voto (la più
  * recente), come richiesto dalle regole di valutazione. Per i RAW usa la
- * media aritmetica delle ultime dieci vendite compatibili, così il valore
- * segue il mercato invece di mescolare l'intera serie storica.
+ * media delle ultime dieci vendite compatibili e richiede almeno tre
+ * comparabili, senza allargare lingua o stampa.
  */
 export async function lookupMarketPrice(input: PriceLookupInput): Promise<PriceLookupResult> {
   if (input.format === "zashi") {
@@ -333,7 +351,13 @@ async function notTrackedEdition(input: PriceLookupInput): Promise<PriceLookupRe
     series_matched: null,
     dataset: "none",
     market_state: input.graded ? "graded" : "raw",
-    requested: { volume: input.volume ?? null, grade: input.grade ?? null, obi: "unknown" },
+    requested: {
+      volume: input.volume ?? null,
+      grade: input.grade ?? null,
+      obi: "unknown",
+      language: input.language ?? null,
+      is_first_print: input.isFirstPrint ?? null,
+    },
     matched_rows: [],
     match_count: 0,
     usd_eur_rate: round2(await getUsdToEurRate()),
@@ -361,6 +385,8 @@ async function lookupTankobonTracker(input: PriceLookupInput): Promise<PriceLook
       volume: input.volume ?? null,
       grade: input.grade ?? null,
       obi: input.hasObi === true ? "Yes" : input.hasObi === false ? "No" : "unknown",
+      language: input.language ?? "Japanese",
+      is_first_print: input.isFirstPrint ?? null,
     },
     matched_rows: [],
     match_count: 0,
@@ -386,10 +412,35 @@ async function lookupTankobonTracker(input: PriceLookupInput): Promise<PriceLook
   if (input.volume != null) {
     candidates = candidates.filter((row) => row.volume === input.volume);
   }
+  let rawMatchNote: string | null = null;
+  if (!input.graded) {
+    candidates = candidates.filter((row) => row.language?.trim().toLowerCase() === "japanese");
+    if (candidates.length === 0) {
+      rawMatchNote = `Nessuna vendita RAW con lingua giapponese esplicitamente indicata per ${matchedSeries} volume ${input.volume ?? "?"}.`;
+    }
+
+    if (candidates.length > 0 && input.isFirstPrint != null) {
+      const wantedEvidence: RawPrintEvidence = input.isFirstPrint ? "first_print" : "reprint";
+      const printCandidates = candidates.filter((row) => classifyRawPrintEvidence(row.title) === wantedEvidence);
+      if (printCandidates.length > 0) {
+        candidates = printCandidates;
+      } else {
+        candidates = [];
+        rawMatchNote = input.isFirstPrint
+          ? `Nessuna vendita RAW giapponese dichiara esplicitamente la prima stampa per ${matchedSeries} volume ${input.volume ?? "?"}.`
+          : `Nessuna vendita RAW giapponese dichiara esplicitamente una ristampa per ${matchedSeries} volume ${input.volume ?? "?"}.`;
+      }
+    }
+  }
   if (input.hasObi != null) {
     const wanted = input.hasObi ? "Yes" : "No";
     const byObi = candidates.filter((row) => row.obi === wanted);
-    if (byObi.length > 0) candidates = byObi;
+    if (byObi.length > 0) {
+      candidates = byObi;
+    } else if (!input.graded && candidates.length > 0) {
+      candidates = [];
+      rawMatchNote = `Nessuna vendita RAW comparabile con OBI ${input.hasObi ? "presente" : "assente"} per ${matchedSeries} volume ${input.volume ?? "?"}.`;
+    }
   }
   if (input.graded && input.grade != null) {
     candidates = candidates.filter((row) => row.grade === input.grade);
@@ -404,6 +455,12 @@ async function lookupTankobonTracker(input: PriceLookupInput): Promise<PriceLook
     obi: row.obi,
     price_usd: row.price_usd,
     sold_date: row.sold_date,
+    ...(!input.graded
+      ? {
+          language: row.language,
+          print_evidence: classifyRawPrintEvidence(row.title),
+        }
+      : {}),
   });
 
   if (candidates.length === 0) {
@@ -411,7 +468,16 @@ async function lookupTankobonTracker(input: PriceLookupInput): Promise<PriceLook
       ...base,
       note: input.graded
         ? `Nessuna vendita graded compatibile (volume ${input.volume ?? "?"}, voto ${input.grade ?? "?"}) per ${matchedSeries}. Lascia il valore vuoto e spiegalo.`
-        : `Nessuna vendita RAW compatibile per ${matchedSeries} volume ${input.volume ?? "?"}. Lascia il valore vuoto e spiegalo.`,
+        : `${rawMatchNote ?? `Nessuna vendita RAW compatibile per ${matchedSeries} volume ${input.volume ?? "?"}.`} Lascia il valore vuoto e spiegalo.`,
+    };
+  }
+
+  if (!input.graded && candidates.length < RAW_MIN_RECENT_SALES) {
+    return {
+      ...base,
+      matched_rows: candidates.map(toMatched),
+      match_count: candidates.length,
+      note: `Solo ${candidates.length} vendite RAW compatibili per ${matchedSeries} volume ${input.volume ?? "?"} dopo i filtri noti; ne servono almeno ${RAW_MIN_RECENT_SALES} per una stima West Blue. Non sono stati aggiunti comparabili allargando lingua, stampa o OBI.`,
     };
   }
 
@@ -429,15 +495,18 @@ async function lookupTankobonTracker(input: PriceLookupInput): Promise<PriceLook
 
   const { sales: recentSales, withinRecentWindow } = selectRawSales(candidates);
   const prices = recentSales.map((row) => row.price_usd as number);
+  const recency = withinRecentWindow
+    ? "più recenti degli ultimi 12 mesi"
+    : `più recenti disponibili (meno di ${RAW_MIN_RECENT_SALES} negli ultimi 12 mesi)`;
+  const printMatch =
+    input.isFirstPrint == null ? "" : input.isFirstPrint ? ", prima stampa dichiarata" : ", ristampa dichiarata";
   return {
     ...base,
     matched_rows: recentSales.map(toMatched),
     match_count: recentSales.length,
     suggested_value_eur: round2(average(prices) * rate),
     suggested_basis: "media_ultime_vendite",
-    note: withinRecentWindow
-      ? `RAW: media aritmetica delle ${prices.length} vendite compatibili più recenti degli ultimi 12 mesi, mostrate, convertita in EUR.`
-      : `RAW: meno di ${RAW_MIN_RECENT_SALES} vendite compatibili negli ultimi 12 mesi; media aritmetica delle ${prices.length} vendite più recenti disponibili, mostrate, convertita in EUR.`,
+    note: `RAW: media aritmetica delle ${prices.length} vendite compatibili ${recency}, lingua giapponese${printMatch}${input.hasObi == null ? "" : `, OBI ${input.hasObi ? "presente" : "assente"}`}, convertita in EUR. La stampa è dedotta dal titolo dell'annuncio e non è verificata.`,
   };
 }
 
@@ -583,7 +652,6 @@ async function lookupZasshiPrice(input: PriceLookupInput): Promise<PriceLookupRe
 async function withEbayFallback(input: PriceLookupInput, tracker: PriceLookupResult): Promise<PriceLookupResult> {
   if (input.graded) return tracker;
   let ebay;
-  let label: string;
   if (input.format === "zashi") {
     const issue = parseIssue(input.issue);
     const year = input.year ?? issue.year;
@@ -594,7 +662,6 @@ async function withEbayFallback(input: PriceLookupInput, tracker: PriceLookupRes
       year,
       usdToEur: tracker.usd_eur_rate,
     });
-    label = "di questo numero";
   } else {
     if (input.volume == null) return tracker;
     ebay = await lookupEbayVolume({
@@ -607,7 +674,6 @@ async function withEbayFallback(input: PriceLookupInput, tracker: PriceLookupRes
       hasObi: input.hasObi,
       isSpecialEdition: input.isSpecialEdition,
     });
-    label = isJapaneseEdition(input.language) ? "di questo volume" : "per questa edizione";
   }
   if (!ebay.configured) return tracker;
   if (ebay.value_eur == null) {
@@ -629,6 +695,6 @@ async function withEbayFallback(input: PriceLookupInput, tracker: PriceLookupRes
     match_count: ebay.listings.length,
     suggested_value_eur: ebay.value_eur,
     suggested_basis: "ebay_mediana_annunci",
-    note: `${ebay.note} West Blue: nessuna vendita RAW ${label}.`,
+    note: `${ebay.note} West Blue: ${tracker.note}`,
   };
 }

@@ -119,14 +119,23 @@ dataset**, ed è esposto sia a Koma sia all'MCP come tool
 
 Il tool applica i filtri compatibili (volume, OBI, RAW/graded), e restituisce:
 per i **graded** il prezzo della riga esatta con stesso volume e voto (mai una
-media tra graded diversi); per i **RAW** la media aritmetica fino a 10 vendite
-compatibili degli ultimi 12 mesi. Se nell'ultimo anno ce ne sono meno di 3,
-allarga il campione alle 10 più recenti disponibili e lo segnala nelle note.
+media tra graded diversi); per i **tankōbon RAW** filtra prima la lingua
+giapponese e, quando la prima stampa/ristampa è nota, usa solo vendite i cui
+titoli dichiarano esplicitamente quella stampa. È una dichiarazione del
+venditore, non verificata; titoli ambigui non vengono usati per stimare una
+stampa nota. L'OBI viene filtrato dopo lingua e stampa; non si ripiegano
+silenziosamente su vendite con OBI diverso. Calcola la media aritmetica fino
+a 10 vendite compatibili degli ultimi 12 mesi. Se
+nell'ultimo anno ce ne sono meno di 3, allarga il campione alle 10 vendite
+storiche più recenti degli stessi comparabili e lo segnala nelle note. Servono
+almeno 3 comparabili in totale per stimare; se i filtri noti ne lasciano meno,
+la stima West Blue resta vuota e si prova il fallback eBay senza mescolarli.
 Il calcolo usa le stesse righe restituite in `matched_rows`, così il prezzo è
 verificabile e non viene trascinato verso il basso da tutta la storia della serie.
-Il valore è già convertito in EUR. Se non esistono vendite compatibili
-`suggested_value_eur` è `null` e il valore resta vuoto, con il motivo nelle
-note: non vengono usati fallback silenziosi o filtri più larghi.
+Il valore è già convertito in EUR. Se non esistono abbastanza vendite
+compatibili, West Blue non allarga i filtri e restituisce `null` con il motivo
+nelle note; per i RAW tankōbon si tenta esplicitamente il fallback eBay, e il
+valore resta vuoto se anche quello non trova almeno 3 annunci compatibili.
 
 Il tool `revalue_manga_collection` rivaluta e salva tutti gli elementi (o
 solo quelli senza prezzo) direttamente sul server, in un'unica chiamata; il

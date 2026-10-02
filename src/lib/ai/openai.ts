@@ -338,7 +338,8 @@ VALUTAZIONE OBBLIGATORIA
   chiedi l'anno all'utente: non prenderlo dai risultati né indovinarlo;
 - per un graded il tool restituisce la riga esatta con stesso volume e voto:
   usa quel prezzo, non una media tra graded diversi;
-- per RAW il tool restituisce la media aritmetica fino a 10 vendite compatibili degli ultimi 12 mesi, e le stesse vendite sono in matched_rows. Se nell'ultimo anno ce ne sono meno di 3, allarga il campione alle 10 più recenti disponibili e lo segnala nelle note;
+- per i tankōbon RAW il tool filtra sempre per lingua giapponese; se is_first_print è noto usa solo vendite i cui titoli dichiarano esplicitamente la prima stampa o una ristampa. I titoli ambigui non sono comparabili per una stampa nota e il tracker non certifica le dichiarazioni dei venditori. Se has_obi è noto, filtra anche per OBI: se i comparabili compatibili sono meno di 3, non produrre una stima West Blue;
+- per i tankōbon RAW il tool richiede almeno 3 comparabili per stimare e calcola la media aritmetica fino a 10 vendite degli ultimi 12 mesi; se nell'ultimo anno ce ne sono meno di 3, usa le vendite storiche più recenti degli stessi comparabili e lo segnala nelle note. Le stesse vendite sono in matched_rows;
 - il campo suggested_value_eur è già convertito in EUR: copialo in
   estimated_value e imposta currency EUR;
 - riporta in notes la base usata (suggested_basis) e la fonte: West Blue,
