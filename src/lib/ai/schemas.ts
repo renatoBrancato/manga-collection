@@ -99,6 +99,7 @@ export const chatEntityContextSchema = z.object({
   has_obi: z.boolean().nullable().optional(),
   grading_authority: z.string().nullable().optional(),
   grading_value: z.number().nullable().optional(),
+  cover_title_text: z.string().nullable().optional(),
 });
 
 export type ChatEntityContext = z.infer<typeof chatEntityContextSchema>;

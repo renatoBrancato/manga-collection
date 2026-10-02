@@ -156,9 +156,15 @@ e convertito (巻四十 → 40), testo dell'OBI tenuto separato dal titolo,
 sealed, grading, stato e foto di copertina. Prima di aggiungere da una foto,
 Koma deve cercare sul web il titolo trascritto insieme al volume e verificare
 che il nome canonico corrisponda allo stesso logo: una ricerca prezzi non
-sostituisce questo controllo. Se non c'è una corrispondenza affidabile, non
-salva un nome ipotetico e chiede di chiarire; se il logo non è leggibile non
-aggiunge un singolo pezzo con un titolo indovinato. Il modello della chat
+lo sostituisce. Un tool verifica che titolo originale e volume siano nella
+query e che la fonte citata appartenga ai risultati di quella ricerca, poi
+confronta il titolo originale con il catalogo AniList e restituisce il titolo
+inglese ufficiale (o il romaji se manca); il nome proposto dal modello non è
+autorevole. Sia il lookup del prezzo sia l'aggiunta rifiutano nomi diversi dal
+canonico verificato.
+Se non c'è una corrispondenza affidabile, non salva un nome ipotetico e chiede
+di chiarire; se il logo non è leggibile non aggiunge un singolo pezzo con un
+titolo indovinato. Il modello della chat
 riceve la lettura come fonte primaria e le foto gli arrivano a bassa
 risoluzione solo come riscontro; i pezzi letti diventano l'elenco di quelli
 attesi, e il turno non si chiude finché non sono stati tutti proposti (con

@@ -119,6 +119,14 @@ export async function POST(request: Request) {
                 has_obi: item.has_obi,
                 grading_authority: item.grading_authority,
                 grading_value: item.grading_value,
+                cover_title_text:
+                  result.verifiedPhotoTitles.find(
+                    (entry) =>
+                      entry.canonicalSeries === (item.series ?? item.title) &&
+                      entry.volume === item.volume_number
+                  )?.observedTitle ??
+                  body.recentContext?.cover_title_text ??
+                  null,
               };
             })()
           : body.recentContext ?? null,

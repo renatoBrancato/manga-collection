@@ -118,6 +118,26 @@ const functionTools = [
   },
   {
     type: "function",
+    name: "verify_series_identity",
+    description:
+      "Verifica un manga fotografato usando la trascrizione esatta del logo, una fonte nei risultati web e il catalogo AniList, che restituisce il titolo inglese o romaji ufficiale. Il valore canonical_series fornito è solo una proposta: usa sempre canonical_series restituito da questo tool, che può correggerlo. Obbligatorio prima del prezzo e dell'aggiunta.",
+    parameters: {
+      type: "object",
+      properties: {
+        cover_photo: { type: "integer", description: "Numero della foto della copertina; 0 se non proviene da una foto" },
+        observed_title: { type: "string", description: "Titolo originale trascritto dal logo, non dall'OBI" },
+        canonical_series: { type: "string", description: "Nome canonico candidato; il tool lo confronterà con il catalogo ufficiale" },
+        volume_number: { type: ["number", "null"] },
+        evidence_text: { type: "string", description: "Estratto del risultato web che contiene il titolo originale e il volume" },
+        evidence_url: { type: "string", description: "URL della fonte mostrata nella ricerca web" },
+      },
+      required: ["cover_photo", "observed_title", "canonical_series", "volume_number", "evidence_text", "evidence_url"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
+    type: "function",
     name: "lookup_market_price",
     description:
       "Legge direttamente il Manga Price Tracker di West Blue e restituisce le vendite compatibili con il pezzo, con il valore suggerito già convertito in EUR. Per tutti i RAW assenti dal tracker ripiega sugli annunci eBay (provider ebay), con almeno 3 comparabili compatibili; prima stampa, anno, lingua e OBI restringono i comparabili e non si allargano a edizioni diverse se i risultati sono pochi. Gli annunci eBay sono prezzi richiesti, non vendite concluse. È la fonte OBBLIGATORIA per qualsiasi prezzo: usalo sempre invece della ricerca web, che non riesce a leggere le tabelle del tracker.",
@@ -125,6 +145,8 @@ const functionTools = [
       type: "object",
       properties: {
         series: { type: "string", description: "Nome della serie in inglese, es. 'Attack on Titan'" },
+        cover_title_text: { type: ["string", "null"], description: "Se viene da una foto: trascrizione letterale del logo, usata per abbinare la verifica canonica" },
+        cover_photo: { type: ["integer", "null"], description: "Numero della foto della copertina, per identificare il volume in una richiesta con più foto" },
         volume: { type: ["number", "null"], description: "Numero del volume" },
         format: { type: ["string", "null"], enum: ["tankobon", "zashi", null] },
         graded: { type: "boolean", description: "true se il pezzo è in slab gradato, false se RAW" },
@@ -175,7 +197,11 @@ const functionTools = [
       "Completa e invia i dati di UN manga che l'utente ha chiesto esplicitamente di aggiungere. Se le foto mostrano più manga diversi, chiamalo una volta per ciascuno (anche in parallelo). Prima usa search_collection per evitare duplicati e lookup_market_price per il valore.",
     parameters: {
       type: "object",
-      properties: { ...itemProperties, cover_photo: coverPhotoProperty },
+      properties: {
+        ...itemProperties,
+        cover_title_text: { type: ["string", "null"], description: "Trascrizione letterale del titolo sul logo della copertina; non viene salvata" },
+        cover_photo: coverPhotoProperty,
+      },
       required: ["series", "format", "currency"],
       additionalProperties: false,
     },
@@ -265,6 +291,17 @@ Prima di aggiungere:
   traslitterato proposto dalla lettura visiva e non confondere titolo, autore
   e testo dell'OBI. Se le fonti non confermano la corrispondenza, non salvare
   un nome ipotetico: chiedi all'utente di chiarire il titolo;
+- flusso obbligatorio per una foto: web_search del titolo originale + volume,
+  poi verify_series_identity con titolo originale, volume, estratto e fonte
+  risultante; il tool controlla il catalogo manga AniList e restituisce il
+  titolo inglese ufficiale o, se assente, quello romaji. Usa esattamente il
+  canonical_series restituito, mai una traduzione libera; solo dopo chiama
+  lookup_market_price e poi prepare_add_manga. I tool rifiutano prezzo o
+  salvataggio se l'identità non è stata verificata prima;
+- non chiedere all'utente di scegliere il nome canonico prima di aver tentato
+  questa verifica: se la prima ricerca è inconcludente, prova una ricerca
+  mirata del titolo originale e del volume; chiedi conferma solo dopo il
+  fallimento esplicito della verifica;
 - non lasciare questi campi vuoti solo perché non sono scritti nel messaggio:
   cercali online, usando foto, serie, numero ed edizione per disambiguare.
 
@@ -290,6 +327,10 @@ VALUTAZIONE OBBLIGATORIA
   prima stampa il fallback eBay considera solo annunci che la dichiarano
   esplicitamente e non li sostituisce con ristampe se sono pochi. Non dedurre
   la prima stampa da un titolo ambiguo; se non è certa, passa null;
+- quando il prezzo riguarda un pezzo fotografato, passa anche
+  cover_title_text (testo letterale del logo) e cover_photo; il lookup deve
+  usare il nome canonico restituito da verify_series_identity, non una
+  traslitterazione provvisoria;
 - per gli zashi passa format "zashi", series = nome della rivista in romaji
   ("Weekly Shonen Jump", non 週刊少年ジャンプ), issue_number come stampato
   ("36-37") e year: senza numero e anno il tracker non trova il numero esatto;
@@ -584,7 +625,10 @@ async function executeTool(
   }
 
   if (call.name === "prepare_add_manga") {
-    const { cover_photo: coverPhoto, ...addArgs } = args;
+    const coverPhoto = args.cover_photo;
+    const addArgs = { ...args };
+    delete addArgs.cover_photo;
+    delete addArgs.cover_title_text;
     // Con una sola foto è quasi sempre la copertina (comportamento storico);
     // con più foto la copertina va indicata esplicitamente, altrimenti un
     // retro o un colophon diventerebbero la cover.
@@ -647,6 +691,82 @@ type PhotoPiece = {
   condition: string;
 };
 
+type WebSearchEvidence = { query: string; sources: Array<{ title?: string; url: string }> };
+type CanonicalTitleResult = { canonicalSeries: string | null; error?: string };
+const canonicalTitleCache = new Map<string, { value: CanonicalTitleResult; expiresAt: number }>();
+
+function normalizeIdentityText(value: string): string {
+  return value.normalize("NFKC").toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+function sameSeriesIdentity(left: string, right: string): boolean {
+  if (normalizeIdentityText(left) === normalizeIdentityText(right)) return true;
+  const ignored = new Set(["of", "the", "no"]);
+  const words = (value: string) =>
+    value
+      .normalize("NFKC")
+      .toLocaleLowerCase()
+      .match(/[\p{L}\p{N}]+/gu)
+      ?.filter((word) => !ignored.has(word))
+      .sort()
+      .join("|") ?? "";
+  const leftWords = words(left);
+  return leftWords.length > 0 && leftWords === words(right);
+}
+
+function identityKey(title: string, volume: number | null): string {
+  return `${normalizeIdentityText(title)}|${volume ?? ""}`;
+}
+
+async function resolveCanonicalMangaTitle(observedTitle: string): Promise<CanonicalTitleResult> {
+  const key = normalizeIdentityText(observedTitle);
+  const cached = canonicalTitleCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  const query = `query ($search: String) {
+    Media(search: $search, type: MANGA) {
+      title { romaji english native }
+      synonyms
+    }
+  }`;
+  const response = await fetch("https://graphql.anilist.co", {
+    method: "POST",
+    headers: { accept: "application/json", "content-type": "application/json" },
+    body: JSON.stringify({ query, variables: { search: observedTitle } }),
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!response.ok) {
+    return { canonicalSeries: null, error: `Catalogo manga non raggiungibile (${response.status}).` };
+  }
+  const payload = (await response.json()) as {
+    data?: {
+      Media?: {
+        title?: { romaji?: string | null; english?: string | null; native?: string | null };
+        synonyms?: string[];
+      } | null;
+    };
+    errors?: Array<{ message?: string }>;
+  };
+  if (payload.errors?.length) {
+    return { canonicalSeries: null, error: "Catalogo manga non disponibile per questa verifica." };
+  }
+  const manga = payload.data?.Media;
+  const titles = [
+    manga?.title?.native,
+    manga?.title?.romaji,
+    manga?.title?.english,
+    ...(manga?.synonyms ?? []),
+  ].filter((title): title is string => Boolean(title?.trim()));
+  if (!titles.some((title) => normalizeIdentityText(title) === key)) {
+    return { canonicalSeries: null };
+  }
+  const canonicalSeries =
+    manga?.title?.english?.trim() || manga?.title?.romaji?.trim() || manga?.title?.native?.trim() || null;
+  const value = { canonicalSeries };
+  canonicalTitleCache.set(key, { value, expiresAt: Date.now() + 24 * 60 * 60 * 1000 });
+  return value;
+}
+
 const photoReadingSchema = {
   type: "object",
   additionalProperties: false,
@@ -689,7 +809,7 @@ const photoReadingSchema = {
 
 const photoReadingInstructions = `Sei un esperto di manga giapponesi. Elenca i pezzi fisici distinti mostrati nelle foto: più foto dello stesso volume (copertina, retro, dorso, colophon, angoli) sono UN pezzo; una foto con più volumi sono più pezzi.
 Per ciascun pezzo:
-- cover_title_text: trascrivi il titolo del LOGO principale della copertina nella scrittura originale, rispettando i caratteri visibili (es. 極楽街); non tradurlo, non ricostruirlo dal testo promozionale e non includere frasi dell'OBI. Se il logo non è leggibile, null;
+- cover_title_text: trascrivi per intero il titolo del LOGO principale nella scrittura originale, includendo tutte le parole/caratteri che compongono il marchio, anche se disposti in verticale, su righe diverse o con dimensioni diverse (non copiare solo la parola più grande o l'ultima parte); orienta mentalmente la copertina prima di leggerla. Non tradurlo, non ricostruirlo dal testo promozionale e non includere frasi dell'OBI. Se una parte del logo non è leggibile con sufficiente certezza, null invece di una trascrizione parziale;
 - series: nome canonico dell'opera corrispondente al logo principale, in romaji/inglese quando identificabile. Non usare il testo dell'OBI per completare o indovinare il nome: se il logo non è leggibile, lascia la serie vuota;
 - volume_text: la scritta del numero di volume COPIATA esattamente come stampata (es. 巻四十, 巻ノ六十, 第23巻, 1), di solito piccola vicino al logo o sul dorso; volume_number: la sua conversione in cifre (四十=40, 六十=60, 百五=105);
 - language: lingua dell'edizione fisica, non la lingua del nome canonico. Se sulla copertina si vedono chiaramente titolo/testi/editori giapponesi, indica "Japanese" anche se series è restituito in inglese; se la lingua non è distinguibile, null;
@@ -756,6 +876,7 @@ export async function runCollectionChat({
   actions: ChatAction[];
   executed: number;
   intent: { valuation: boolean };
+  verifiedPhotoTitles: Array<{ observedTitle: string; canonicalSeries: string; volume: number | null }>;
 }> {
   const requiresValuation =
     /\b(valut|prezz|quanto vale|stima(?:re|zione)?|rivalut)\w*/i.test(message);
@@ -765,7 +886,7 @@ export async function runCollectionChat({
     ? [{ type: "web_search" }, ...functionTools]
     : functionTools;
   const contextText = recentContext
-    ? `\n\nELEMENTO CORRENTE (usa questo riferimento per pronomi e comandi successivi. Per una richiesta di prezzo usa i dati salvati qui, in particolare lingua, prima stampa, OBI e grading; non richiederli di nuovo se sono già presenti):\n${JSON.stringify(recentContext)}`
+    ? `\n\nELEMENTO CORRENTE (usa questo riferimento per pronomi e comandi successivi. Per una richiesta di prezzo usa i dati salvati qui, in particolare lingua, prima stampa, OBI e grading; non richiederli di nuovo se sono già presenti. Se cover_title_text è presente, usalo come titolo originale per riverificare il nome canonico):\n${JSON.stringify(recentContext)}`
     : "";
   const content: Array<Record<string, string>> = [
     { type: "input_text", text: `${message}${contextText}` },
@@ -821,6 +942,18 @@ export async function runCollectionChat({
   let usedWebSearch = false;
   let usedPriceLookup = false;
   let priceLookupFoundValue = false;
+  const webSearchEvidence: WebSearchEvidence[] = [];
+  const verifiedIdentities = new Map<
+    string,
+    { observedTitle: string; canonicalSeries: string; volume: number | null }
+  >();
+  const verifiedPhotoTitles = () =>
+    [...verifiedIdentities.values()].map(({ observedTitle, canonicalSeries, volume }) => ({
+      observedTitle,
+      canonicalSeries,
+      volume,
+    }));
+  const completedPriceLookups = new Set<string>();
 
   // Con più pezzi da aggiungere, il modello tende a fermarsi al primo (per
   // esempio scartando in silenzio quello senza vendite compatibili). Si
@@ -861,6 +994,7 @@ export async function runCollectionChat({
       .map(([, label]) => label);
   };
   let reminders = 0;
+  let identityReminderSent = false;
   // Con più foto e una richiesta di aggiunta, ogni foto deve finire in un
   // pezzo (come copertina) o essere dichiarata come lato di un pezzo già
   // preparato: si chiede una sola verifica esplicita al modello.
@@ -897,10 +1031,113 @@ export async function runCollectionChat({
   // per l'aggiunta: senza margine gli ultimi pezzi venivano persi.
   const maxRounds = MAX_TOOL_ROUNDS + Math.min(photoPieces?.length ?? imageUrls.length, MAX_CHAT_IMAGES);
   for (let round = 0; round < maxRounds; round += 1) {
-    if (response.output.some((item) => item.type === "web_search_call")) {
+    const searchCalls = response.output.filter((item) => item.type === "web_search_call");
+    if (searchCalls.length > 0) {
       usedWebSearch = true;
+      for (const item of searchCalls) {
+        const action = (item as { action?: { query?: unknown; sources?: unknown } }).action;
+        if (typeof action?.query !== "string" || !Array.isArray(action.sources)) continue;
+        const sources = action.sources.flatMap((source) => {
+          if (!source || typeof source !== "object") return [];
+          const entry = source as { title?: unknown; url?: unknown };
+          return typeof entry.url === "string"
+            ? [{ ...(typeof entry.title === "string" ? { title: entry.title } : {}), url: entry.url }]
+            : [];
+        });
+        webSearchEvidence.push({ query: action.query, sources });
+      }
     }
     const calls = response.output.filter((item): item is FunctionCall => item.type === "function_call");
+    const verifiedBeforeRound = new Map(verifiedIdentities);
+    const identityVerificationResults = new Map<string, string>();
+    for (const call of calls) {
+      if (call.name !== "verify_series_identity") continue;
+      try {
+        const args = JSON.parse(call.arguments || "{}") as Record<string, unknown>;
+        const coverPhoto = typeof args.cover_photo === "number" ? args.cover_photo : -1;
+        const observedTitle = typeof args.observed_title === "string" ? args.observed_title.trim() : "";
+        const proposedSeries = typeof args.canonical_series === "string" ? args.canonical_series.trim() : "";
+        const volume = typeof args.volume_number === "number" ? args.volume_number : null;
+        const evidenceText = typeof args.evidence_text === "string" ? args.evidence_text.trim() : "";
+        const evidenceUrl = typeof args.evidence_url === "string" ? args.evidence_url.trim() : "";
+        const validEvidenceUrl = /^https:\/\/\S+$/i.test(evidenceUrl);
+        const matchingSource = webSearchEvidence.find(
+          ({ query, sources }) =>
+            observedTitle.length > 0 &&
+            evidenceText.length > 0 &&
+            validEvidenceUrl &&
+            normalizeIdentityText(query).includes(normalizeIdentityText(observedTitle)) &&
+            (volume === null ||
+              new RegExp(`(?:^|\\D)${volume}(?:\\D|$)`).test(query.normalize("NFKC"))) &&
+            sources.some((source) => source.url === evidenceUrl)
+        );
+        const matchingPhoto =
+          coverPhoto > 0
+            ? photoPieces?.find(
+                (piece) =>
+                  (piece.cover_photo === coverPhoto || piece.photos.includes(coverPhoto)) &&
+                  normalizeIdentityText(piece.cover_title_text ?? "") === normalizeIdentityText(observedTitle) &&
+                  piece.volume_number === volume
+              )
+            : undefined;
+        const matchingContext =
+          coverPhoto === 0 &&
+          imageUrls.length === 0 &&
+          recentContext &&
+          normalizeIdentityText(recentContext.cover_title_text ?? recentContext.series) ===
+            normalizeIdentityText(observedTitle) &&
+          recentContext.volume_number === volume;
+        const fallbackPhotoIdentity =
+          coverPhoto > 0 && imageUrls.length > 0 && !photoPieces && observedTitle.length > 0;
+        let problem: string | null = null;
+        if (!usedWebSearch || !matchingSource) {
+          problem = "Non trovo nei risultati web una fonte per il titolo originale e il volume.";
+        } else if (!matchingPhoto && !matchingContext && !fallbackPhotoIdentity) {
+          problem = "Il titolo o il volume non corrispondono all'elemento identificato nella foto o nel contesto corrente.";
+        } else {
+          const resolution = await resolveCanonicalMangaTitle(observedTitle);
+          if (resolution.error) {
+            problem = resolution.error;
+          } else if (!resolution.canonicalSeries) {
+            problem = "Il titolo originale non ha una corrispondenza esatta nel catalogo manga. Non inventare il nome canonico.";
+          } else {
+            verifiedIdentities.set(identityKey(observedTitle, volume), {
+              observedTitle,
+              canonicalSeries: resolution.canonicalSeries,
+              volume,
+            });
+          }
+        }
+        identityVerificationResults.set(
+          call.call_id,
+          JSON.stringify(
+            problem
+              ? {
+                  verified: false,
+                  error: problem,
+                  instruction:
+                    "Cerca una fonte sui risultati web che contenga il titolo originale e il numero. Il nome canonico ufficiale non è verificato: se il catalogo non trova una corrispondenza esatta, chiedi all'utente.",
+                }
+              : {
+                  verified: true,
+                  canonical_series: verifiedIdentities.get(identityKey(observedTitle, volume))?.canonicalSeries,
+                  proposed_series: proposedSeries,
+                  volume_number: volume,
+                  evidence_text: evidenceText,
+                  evidence_url: evidenceUrl,
+                }
+          )
+        );
+      } catch {
+        identityVerificationResults.set(
+          call.call_id,
+          JSON.stringify({
+            verified: false,
+            error: "La verifica dell'identità non è riuscita; riprova o chiedi all'utente di chiarire il titolo.",
+          })
+        );
+      }
+    }
     const pendingNow = requiresAdd && actions.length > 0 ? pendingPieces() : [];
     const uncoveredNow = !photoCheckDone && actions.length > 0 && pendingNow.length === 0 ? uncoveredPhotos() : [];
     if (calls.length === 0 && uncoveredNow.length > 0 && round < maxRounds - 1) {
@@ -931,6 +1168,38 @@ export async function runCollectionChat({
       });
       continue;
     }
+    const unverifiedPhotoPieces =
+      requiresAdd && photoPieces
+        ? photoPieces.filter(
+            (piece) =>
+              piece.cover_title_text?.trim() &&
+              !verifiedIdentities.has(identityKey(piece.cover_title_text, piece.volume_number))
+          )
+        : [];
+    if (
+      calls.length === 0 &&
+      unverifiedPhotoPieces.length > 0 &&
+      !identityReminderSent &&
+      round < maxRounds - 1
+    ) {
+      identityReminderSent = true;
+      response = await createResponse({
+        model: process.env.OPENAI_CHAT_MODEL || "gpt-5-mini",
+        instructions,
+        tools,
+        reasoning: { effort: "low" },
+        max_output_tokens: 4000,
+        max_tool_calls: 6,
+        include: ["web_search_call.action.sources"],
+        previous_response_id: response.id,
+        input: [{
+          role: "user",
+          content:
+            "Non chiedere ancora conferma all'utente. Per ogni copertina non verificata, cerca sul web il titolo originale completo trascritto dalla copertina insieme al volume, poi chiama verify_series_identity con una fonte dei risultati. Se non trovi una fonte affidabile dopo questo tentativo, spiega l'incertezza e chiedi quale nome usare.",
+        }],
+      });
+      continue;
+    }
     if (calls.length === 0) {
       return {
         responseId: response.id,
@@ -938,6 +1207,7 @@ export async function runCollectionChat({
         actions,
         executed,
         intent: { valuation: requiresValuation },
+        verifiedPhotoTitles: verifiedPhotoTitles(),
       };
     }
 
@@ -947,12 +1217,32 @@ export async function runCollectionChat({
         try {
           const args = JSON.parse(call.arguments || "{}") as Record<string, unknown>;
           const requestedCoverPhoto = typeof args.cover_photo === "number" ? args.cover_photo : null;
+          const requestedCoverTitle =
+            typeof args.cover_title_text === "string"
+              ? args.cover_title_text
+              : call.name === "verify_series_identity" && typeof args.observed_title === "string"
+                ? args.observed_title
+                : null;
+          const exactTitleMatch =
+            requestedCoverTitle == null
+              ? []
+              : photoPieces?.filter(
+                  (piece) =>
+                    normalizeIdentityText(piece.cover_title_text ?? "") ===
+                    normalizeIdentityText(requestedCoverTitle)
+                ) ?? [];
           const exactCoverMatch =
             requestedCoverPhoto === null
               ? []
-              : photoPieces?.filter((piece) => piece.cover_photo === requestedCoverPhoto) ?? [];
+              : photoPieces?.filter(
+                  (piece) =>
+                    piece.cover_photo === requestedCoverPhoto ||
+                    (call.name === "verify_series_identity" && piece.photos.includes(requestedCoverPhoto))
+                ) ?? [];
           const matchingPhotoPieces =
-            exactCoverMatch.length > 0
+            exactTitleMatch.length > 0
+              ? exactTitleMatch
+              : exactCoverMatch.length > 0
               ? exactCoverMatch
               : photoPieces?.filter((piece) =>
                   typeof args.volume_number === "number" &&
@@ -965,13 +1255,38 @@ export async function runCollectionChat({
               : photoPieces?.length === 1
                 ? photoPieces[0]
                 : undefined;
+
+          const contextVolume = call.name === "lookup_market_price"
+            ? (typeof args.volume === "number" ? args.volume : null)
+            : (typeof args.volume_number === "number" ? args.volume_number : null);
+          const requestedSeries = typeof args.series === "string" ? args.series : "";
+          const usesRecentContext =
+            imageUrls.length === 0 &&
+            recentContext !== null &&
+            (contextVolume === null || contextVolume === recentContext.volume_number) &&
+            (!requestedSeries || sameSeriesIdentity(requestedSeries, recentContext.series));
+          const identityVolume = photoPiece?.volume_number ??
+            (typeof args.volume_number === "number" ? args.volume_number : null) ??
+            (typeof args.volume === "number" ? args.volume : null) ??
+            (usesRecentContext ? recentContext.volume_number : null);
+          const contextObservedTitle = usesRecentContext
+            ? recentContext.cover_title_text ?? recentContext.series
+            : "";
+          const requestIdentityTitle = photoPiece?.cover_title_text?.trim() ||
+            (imageUrls.length > 0 && typeof args.cover_title_text === "string" ? args.cover_title_text.trim() : "") ||
+            contextObservedTitle;
+          const identityKeyForCall = requestIdentityTitle ? identityKey(requestIdentityTitle, identityVolume) : null;
+          const verifiedIdentity = identityKeyForCall ? verifiedBeforeRound.get(identityKeyForCall) : undefined;
+          if (call.name === "lookup_market_price" && photoPiece) {
+            args.cover_title_text ??= photoPiece.cover_title_text;
+            args.cover_photo ??= photoPiece.cover_photo ?? photoPiece.photos[0];
+            args.volume ??= photoPiece.volume_number;
+          }
           if (call.name === "lookup_market_price" && recentContext) {
-            const series = typeof args.series === "string" ? normalizeSeries(args.series) : "";
-            const sameSeries = !series || series === normalizeSeries(recentContext.series);
             const sameVolume =
               args.volume == null ||
               (typeof args.volume === "number" && args.volume === recentContext.volume_number);
-            if (sameSeries && sameVolume) {
+            if (sameVolume) {
               args.series ??= recentContext.series;
               args.volume ??= recentContext.volume_number;
               args.format ??= recentContext.format;
@@ -984,7 +1299,29 @@ export async function runCollectionChat({
             }
           }
 
-          if (call.name === "prepare_add_manga" && requiresWebResearch && !usedWebSearch) {
+          if (call.name === "verify_series_identity") {
+            result = {
+              output:
+                identityVerificationResults.get(call.call_id) ??
+                JSON.stringify({ verified: false, error: "Identità non verificata." }),
+            };
+          } else if (
+            call.name === "lookup_market_price" &&
+            (imageUrls.length > 0 || usesRecentContext) &&
+            (!identityKeyForCall ||
+              !verifiedIdentity ||
+              normalizeIdentityText(String(args.series ?? "")) !==
+                normalizeIdentityText(verifiedIdentity.canonicalSeries) ||
+              (verifiedIdentity.volume !== null && args.volume !== verifiedIdentity.volume))
+          ) {
+            result = {
+              output: JSON.stringify({
+                error: "Nome canonico non verificato per questo prezzo",
+                instruction:
+                  "Prima cerca sul web il titolo originale della copertina e il volume, poi chiama verify_series_identity con una fonte dei risultati. Riprova lookup_market_price usando esattamente canonical_series restituito dalla verifica.",
+              }),
+            };
+          } else if (call.name === "prepare_add_manga" && requiresWebResearch && !usedWebSearch) {
             result = {
               output: JSON.stringify({
                 error: "Metadati dell'edizione non ancora verificati",
@@ -995,14 +1332,41 @@ export async function runCollectionChat({
           } else if (
             call.name === "prepare_add_manga" &&
             imageUrls.length > 0 &&
-            photoPiece &&
-            !photoPiece.cover_title_text?.trim()
+            (!requestIdentityTitle || !identityKeyForCall)
           ) {
             result = {
               output: JSON.stringify({
                 error: "Titolo della copertina non leggibile",
                 instruction:
                   "Non aggiungere il pezzo con un nome indovinato. Chiedi all'utente di trascrivere il titolo principale del logo oppure di inviare una foto più nitida della copertina.",
+              }),
+            };
+          } else if (
+            call.name === "prepare_add_manga" &&
+            imageUrls.length > 0 &&
+            (!verifiedIdentity ||
+              normalizeIdentityText(String(args.series ?? "")) !==
+                normalizeIdentityText(verifiedIdentity.canonicalSeries) ||
+              (verifiedIdentity.volume !== null && args.volume_number !== verifiedIdentity.volume))
+          ) {
+            result = {
+              output: JSON.stringify({
+                error: "Titolo canonico della copertina non verificato",
+                instruction:
+                  "Non aggiungere ancora il manga. Cerca il titolo originale del logo insieme al volume, verifica la corrispondenza e chiama verify_series_identity; usa esattamente canonical_series nel salvataggio.",
+              }),
+            };
+          } else if (
+            call.name === "prepare_add_manga" &&
+            imageUrls.length > 0 &&
+            identityKeyForCall &&
+            !completedPriceLookups.has(identityKeyForCall)
+          ) {
+            result = {
+              output: JSON.stringify({
+                error: "Prezzo non ancora cercato per il titolo verificato",
+                instruction:
+                  "Prima chiama lookup_market_price con canonical_series verificato, cover_title_text e cover_photo. Poi aggiungi il pezzo anche se il prezzo resta null.",
               }),
             };
           } else if (
@@ -1046,6 +1410,16 @@ export async function runCollectionChat({
             executed += result.sideEffects ?? 0;
             if (call.name === "lookup_market_price") {
               usedPriceLookup = true;
+              if (identityKeyForCall) {
+                try {
+                  const parsed = JSON.parse(result.output) as Record<string, unknown>;
+                  if (Object.hasOwn(parsed, "suggested_value_eur")) {
+                    completedPriceLookups.add(identityKeyForCall);
+                  }
+                } catch {
+                  // Un errore del lookup non autorizza il salvataggio del pezzo.
+                }
+              }
               if (requiresAdd && !photoPieces && typeof args.series === "string" && args.series.trim()) {
                 const volume = typeof args.volume === "number" ? args.volume : null;
                 evaluated.set(
@@ -1098,6 +1472,7 @@ export async function runCollectionChat({
         actions,
         executed,
         intent: { valuation: requiresValuation },
+        verifiedPhotoTitles: verifiedPhotoTitles(),
       };
     }
 
@@ -1126,5 +1501,6 @@ export async function runCollectionChat({
     actions,
     executed,
     intent: { valuation: requiresValuation },
+    verifiedPhotoTitles: verifiedPhotoTitles(),
   };
 }
