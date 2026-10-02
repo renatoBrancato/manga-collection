@@ -112,6 +112,13 @@ export async function POST(request: Request) {
                 series: item.series ?? item.title,
                 volume_number: item.volume_number,
                 issue_number: item.issue_number,
+                format: item.format,
+                release_year: item.release_year,
+                language: item.language,
+                is_first_print: item.is_first_print,
+                has_obi: item.has_obi,
+                grading_authority: item.grading_authority,
+                grading_value: item.grading_value,
               };
             })()
           : body.recentContext ?? null,

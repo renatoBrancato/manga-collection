@@ -178,6 +178,11 @@ Il turno non si chiude alla prima proposta se restano pezzi già valutati con
 (al massimo due) e aggiunge anche quelli senza vendite compatibili, con
 valore vuoto. Con un solo pezzo il comportamento e il costo non cambiano.
 
+L'elemento corrente mantenuto tra messaggi consecutivi conserva anche formato,
+anno, lingua, prima stampa, OBI e grading. Una richiesta successiva di prezzo
+usa questi dati salvati per il lookup, senza chiedere di nuovo informazioni
+già fornite o riconosciute dalle foto.
+
 La conversazione di Koma, le operazioni e le foto in
 contesto vengono conservate nel `localStorage` con una chiave separata per
 utente, quindi un refresh non azzera la chat. Il pulsante **Nuova chat**

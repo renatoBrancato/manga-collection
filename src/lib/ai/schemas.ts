@@ -92,6 +92,13 @@ export const chatEntityContextSchema = z.object({
   series: z.string(),
   volume_number: z.number().nullable(),
   issue_number: z.string().nullable(),
+  format: z.enum(["tankobon", "zashi"]).optional(),
+  release_year: z.number().nullable().optional(),
+  language: z.string().nullable().optional(),
+  is_first_print: z.boolean().nullable().optional(),
+  has_obi: z.boolean().nullable().optional(),
+  grading_authority: z.string().nullable().optional(),
+  grading_value: z.number().nullable().optional(),
 });
 
 export type ChatEntityContext = z.infer<typeof chatEntityContextSchema>;

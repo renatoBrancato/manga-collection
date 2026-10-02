@@ -635,6 +635,8 @@ type PhotoPiece = {
   volume_number: number | null;
   issue_number: string | null;
   year: number | null;
+  language: string | null;
+  is_first_print: boolean | null;
   format: "tankobon" | "zashi";
   has_obi: boolean | null;
   obi_text: string | null;
@@ -656,7 +658,8 @@ const photoReadingSchema = {
         type: "object",
         additionalProperties: false,
         required: [
-          "photos", "cover_photo", "series", "cover_title_text", "volume_text", "volume_number", "issue_number", "year", "format", "has_obi",
+          "photos", "cover_photo", "series", "cover_title_text", "volume_text", "volume_number", "issue_number", "year", "language",
+          "is_first_print", "format", "has_obi",
           "obi_text", "is_sealed", "graded", "grading_authority", "grading_value", "condition",
         ],
         properties: {
@@ -668,6 +671,8 @@ const photoReadingSchema = {
           volume_number: { type: ["integer", "null"] },
           issue_number: { type: ["string", "null"] },
           year: { type: ["integer", "null"] },
+          language: { type: ["string", "null"], description: "Lingua dell'edizione identificata dalla copertina, non il titolo canonico tradotto" },
+          is_first_print: { type: ["boolean", "null"] },
           format: { type: "string", enum: ["tankobon", "zashi"] },
           has_obi: { type: ["boolean", "null"] },
           obi_text: { type: ["string", "null"] },
@@ -687,8 +692,10 @@ Per ciascun pezzo:
 - cover_title_text: trascrivi il titolo del LOGO principale della copertina nella scrittura originale, rispettando i caratteri visibili (es. 極楽街); non tradurlo, non ricostruirlo dal testo promozionale e non includere frasi dell'OBI. Se il logo non è leggibile, null;
 - series: nome canonico dell'opera corrispondente al logo principale, in romaji/inglese quando identificabile. Non usare il testo dell'OBI per completare o indovinare il nome: se il logo non è leggibile, lascia la serie vuota;
 - volume_text: la scritta del numero di volume COPIATA esattamente come stampata (es. 巻四十, 巻ノ六十, 第23巻, 1), di solito piccola vicino al logo o sul dorso; volume_number: la sua conversione in cifre (四十=40, 六十=60, 百五=105);
+- language: lingua dell'edizione fisica, non la lingua del nome canonico. Se sulla copertina si vedono chiaramente titolo/testi/editori giapponesi, indica "Japanese" anche se series è restituito in inglese; se la lingua non è distinguibile, null;
 - zashi (riviste): series = nome della rivista in romaji/inglese (週刊少年ジャンプ → "Weekly Shonen Jump"); issue_number = numero del fascicolo come stampato (es. "36・37号" → "36-37"), di solito piccolo in basso a sinistra ("No.36・37"): leggilo cifra per cifra, 5/6 e 3/8 si confondono facilmente; i numeri doppi (合併号) sono SEMPRE consecutivi, quindi "35・37" è impossibile: se le cifre non sono consecutive rileggi, e se resti incerto metti la lettura più probabile e segnalalo in notes; year = anno del fascicolo SOLO se stampato e leggibile in copertina (es. "2025年", data di uscita), altrimenti null: non dedurlo dal contenuto. volume_number null;
 - tankōbon: issue_number e year null;
+- is_first_print: true/false solo se una foto mostra una prova esplicita (es. colophon con 第1刷/初版 o una ristampa indicata); altrimenti null;
 - l'OBI è la fascetta di carta nella parte bassa con pubblicità (film, artbook, date): riporta il testo in obi_text ma NON usarlo mai per serie o volume;
 - is_sealed=true solo se è chiaramente nel cellophane originale termosaldato; una busta protettiva o uno slab non contano;
 - graded/grading_*: solo se è in uno slab con etichetta leggibile;
@@ -758,7 +765,7 @@ export async function runCollectionChat({
     ? [{ type: "web_search" }, ...functionTools]
     : functionTools;
   const contextText = recentContext
-    ? `\n\nELEMENTO CORRENTE (usa questo riferimento per pronomi e comandi successivi):\n${JSON.stringify(recentContext)}`
+    ? `\n\nELEMENTO CORRENTE (usa questo riferimento per pronomi e comandi successivi. Per una richiesta di prezzo usa i dati salvati qui, in particolare lingua, prima stampa, OBI e grading; non richiederli di nuovo se sono già presenti):\n${JSON.stringify(recentContext)}`
     : "";
   const content: Array<Record<string, string>> = [
     { type: "input_text", text: `${message}${contextText}` },
@@ -958,6 +965,24 @@ export async function runCollectionChat({
               : photoPieces?.length === 1
                 ? photoPieces[0]
                 : undefined;
+          if (call.name === "lookup_market_price" && recentContext) {
+            const series = typeof args.series === "string" ? normalizeSeries(args.series) : "";
+            const sameSeries = !series || series === normalizeSeries(recentContext.series);
+            const sameVolume =
+              args.volume == null ||
+              (typeof args.volume === "number" && args.volume === recentContext.volume_number);
+            if (sameSeries && sameVolume) {
+              args.series ??= recentContext.series;
+              args.volume ??= recentContext.volume_number;
+              args.format ??= recentContext.format;
+              args.year ??= recentContext.release_year;
+              args.language ??= recentContext.language;
+              args.is_first_print ??= recentContext.is_first_print;
+              args.has_obi ??= recentContext.has_obi;
+              args.graded ??= Boolean(recentContext.grading_authority);
+              args.grade ??= recentContext.grading_value;
+            }
+          }
 
           if (call.name === "prepare_add_manga" && requiresWebResearch && !usedWebSearch) {
             result = {
@@ -1006,7 +1031,18 @@ export async function runCollectionChat({
               }),
             };
           } else {
-            result = await executeTool(call, items, actionImageUrls, userId);
+            if (call.name === "prepare_add_manga" && photoPiece) {
+              if (args.language == null && photoPiece.language) args.language = photoPiece.language;
+              if (args.has_obi == null && photoPiece.has_obi != null) args.has_obi = photoPiece.has_obi;
+              if (args.is_first_print == null && photoPiece.is_first_print != null) {
+                args.is_first_print = photoPiece.is_first_print;
+              }
+            }
+            const callWithContext =
+              call.name === "lookup_market_price" || call.name === "prepare_add_manga"
+                ? { ...call, arguments: JSON.stringify(args) }
+                : call;
+            result = await executeTool(callWithContext, items, actionImageUrls, userId);
             executed += result.sideEffects ?? 0;
             if (call.name === "lookup_market_price") {
               usedPriceLookup = true;
