@@ -25,6 +25,7 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 const BASIS_LABELS: Record<string, string> = {
+  media_ultime_vendite: "media ultime vendite RAW",
   media_vendite_compatibili: "mediana vendite",
   riga_esatta_piu_recente: "riga esatta graded",
   ebay_mediana_annunci: "mediana annunci eBay",

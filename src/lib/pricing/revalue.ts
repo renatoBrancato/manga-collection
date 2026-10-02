@@ -11,7 +11,7 @@ import type { MangaItem } from "@/lib/types";
  * Rivalutazione massiva della collezione, senza passare da un LLM.
  *
  * Il calcolo del prezzo è già deterministico (`lookupMarketPrice` legge il
- * dataset del tracker e applica le regole: mediana per i RAW, riga esatta per
+ * dataset del tracker e applica le regole: media delle ultime vendite per i RAW, riga esatta per
  * i graded). Farlo orchestrare a un modello significava due tool call per
  * pezzo e decine di migliaia di token per un risultato identico: qui gli
  * stessi item vengono processati lato server a costo zero di token.

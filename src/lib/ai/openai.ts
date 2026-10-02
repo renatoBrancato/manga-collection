@@ -287,7 +287,7 @@ VALUTAZIONE OBBLIGATORIA
   chiedi l'anno all'utente: non prenderlo dai risultati né indovinarlo;
 - per un graded il tool restituisce la riga esatta con stesso volume e voto:
   usa quel prezzo, non una media tra graded diversi;
-- per RAW il tool restituisce la media delle vendite compatibili;
+- per RAW il tool restituisce la media aritmetica fino a 10 vendite compatibili degli ultimi 12 mesi, e le stesse vendite sono in matched_rows. Se nell'ultimo anno ce ne sono meno di 3, allarga il campione alle 10 più recenti disponibili e lo segnala nelle note;
 - il campo suggested_value_eur è già convertito in EUR: copialo in
   estimated_value e imposta currency EUR;
 - riporta in notes la base usata (suggested_basis) e la fonte: West Blue,

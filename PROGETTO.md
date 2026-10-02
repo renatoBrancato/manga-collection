@@ -119,7 +119,11 @@ dataset**, ed è esposto sia a Koma sia all'MCP come tool
 
 Il tool applica i filtri compatibili (volume, OBI, RAW/graded), e restituisce:
 per i **graded** il prezzo della riga esatta con stesso volume e voto (mai una
-media tra graded diversi); per i **RAW** la media delle vendite compatibili.
+media tra graded diversi); per i **RAW** la media aritmetica fino a 10 vendite
+compatibili degli ultimi 12 mesi. Se nell'ultimo anno ce ne sono meno di 3,
+allarga il campione alle 10 più recenti disponibili e lo segnala nelle note.
+Il calcolo usa le stesse righe restituite in `matched_rows`, così il prezzo è
+verificabile e non viene trascinato verso il basso da tutta la storia della serie.
 Il valore è già convertito in EUR. Se non esistono vendite compatibili
 `suggested_value_eur` è `null` e il valore resta vuoto, con il motivo nelle
 note: non vengono usati fallback silenziosi o filtri più larghi.
@@ -238,7 +242,8 @@ Decisioni prese sul modello dati:
 ### Rivalutazione automatica
 
 - `src/lib/pricing/revalue.ts` rivaluta in batch le collezioni applicando le
-  stesse regole di `lookupMarketPrice` (mediana per i RAW, riga esatta per i
+  stesse regole di `lookupMarketPrice` (ultime vendite RAW entro 12 mesi, con
+  fallback al campione più recente se sono poche; riga esatta per i
   graded), ordinando i pezzi per serie così ogni file del tracker viene
   scaricato una sola volta. Nessun LLM coinvolto.
 - Vercel Cron (`vercel.json`, 04:00 UTC) chiama `/api/cron/revalue`, protetto

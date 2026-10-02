@@ -18,6 +18,9 @@ const INDEX_TTL_MS = 6 * 60 * 60 * 1000;
 const CHUNK_TTL_MS = 6 * 60 * 60 * 1000;
 const RATE_TTL_MS = 12 * 60 * 60 * 1000;
 const FALLBACK_USD_EUR = 0.92;
+const RAW_SALES_SAMPLE_SIZE = 10;
+const RAW_RECENT_WINDOW_MS = 365 * 24 * 60 * 60 * 1000;
+const RAW_MIN_RECENT_SALES = 3;
 
 type TrackerIndex = {
   updated_at?: string;
@@ -233,10 +236,19 @@ function parseSoldDate(row: TrackerRow): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
+function average(values: number[]): number {
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function selectRawSales<T extends TrackerRow>(candidates: T[]): { sales: T[]; withinRecentWindow: boolean } {
+  const recent = candidates.filter((row) => parseSoldDate(row) >= Date.now() - RAW_RECENT_WINDOW_MS);
+  if (recent.length >= RAW_MIN_RECENT_SALES) {
+    return { sales: recent.slice(0, RAW_SALES_SAMPLE_SIZE), withinRecentWindow: true };
+  }
+
+  // Se il tracker ha troppo poche vendite nell'ultimo anno, allarghiamo il
+  // campione alle transazioni più recenti disponibili e segnaliamo il limite.
+  return { sales: candidates.slice(0, RAW_SALES_SAMPLE_SIZE), withinRecentWindow: false };
 }
 
 function round2(value: number): number {
@@ -296,8 +308,9 @@ export type PriceLookupResult = {
  * Cerca sul tracker le vendite compatibili con il pezzo.
  *
  * Per i graded restituisce la riga esatta con stesso volume/voto (la più
- * recente), come richiesto dalle regole di valutazione. Per i RAW usa invece
- * la media delle vendite compatibili.
+ * recente), come richiesto dalle regole di valutazione. Per i RAW usa la
+ * media aritmetica delle ultime dieci vendite compatibili, così il valore
+ * segue il mercato invece di mescolare l'intera serie storica.
  */
 export async function lookupMarketPrice(input: PriceLookupInput): Promise<PriceLookupResult> {
   if (input.format === "zashi") {
@@ -384,14 +397,14 @@ async function lookupTankobonTracker(input: PriceLookupInput): Promise<PriceLook
 
   candidates = [...candidates].sort((a, b) => parseSoldDate(b) - parseSoldDate(a));
 
-  const matched_rows = candidates.slice(0, 10).map((row) => ({
+  const toMatched = (row: TrackerRow) => ({
     title: row.title,
     volume: row.volume,
     grade: row.grade,
     obi: row.obi,
     price_usd: row.price_usd,
     sold_date: row.sold_date,
-  }));
+  });
 
   if (candidates.length === 0) {
     return {
@@ -406,7 +419,7 @@ async function lookupTankobonTracker(input: PriceLookupInput): Promise<PriceLook
     const mostRecent = candidates[0];
     return {
       ...base,
-      matched_rows,
+      matched_rows: candidates.slice(0, 10).map(toMatched),
       match_count: candidates.length,
       suggested_value_eur: round2((mostRecent.price_usd ?? 0) * rate),
       suggested_basis: "riga_esatta_piu_recente",
@@ -414,14 +427,17 @@ async function lookupTankobonTracker(input: PriceLookupInput): Promise<PriceLook
     };
   }
 
-  const prices = candidates.map((row) => row.price_usd as number);
+  const { sales: recentSales, withinRecentWindow } = selectRawSales(candidates);
+  const prices = recentSales.map((row) => row.price_usd as number);
   return {
     ...base,
-    matched_rows,
-    match_count: candidates.length,
-    suggested_value_eur: round2(median(prices) * rate),
-    suggested_basis: "media_vendite_compatibili",
-    note: `RAW: media (mediana, robusta agli outlier) di ${prices.length} vendite compatibili convertita in EUR.`,
+    matched_rows: recentSales.map(toMatched),
+    match_count: recentSales.length,
+    suggested_value_eur: round2(average(prices) * rate),
+    suggested_basis: "media_ultime_vendite",
+    note: withinRecentWindow
+      ? `RAW: media aritmetica delle ${prices.length} vendite compatibili più recenti degli ultimi 12 mesi, mostrate, convertita in EUR.`
+      : `RAW: meno di ${RAW_MIN_RECENT_SALES} vendite compatibili negli ultimi 12 mesi; media aritmetica delle ${prices.length} vendite più recenti disponibili, mostrate, convertita in EUR.`,
   };
 }
 
@@ -485,7 +501,7 @@ async function lookupZasshiPrice(input: PriceLookupInput): Promise<PriceLookupRe
 
   const poolYears = [...new Set(pool.map((row) => row.issue_year ?? parseIssue(row.issue_number).year).filter(Boolean))];
   if (year == null && requestedIssue.numbers.length > 0 && poolYears.length > 1) {
-    // Lo stesso numero esce ogni anno: senza anno la mediana mescolerebbe annate diverse.
+    // Lo stesso numero esce ogni anno: senza anno si mescolerebbero annate diverse.
     return {
       ...base,
       series_matched: pool[0]?.magazine ?? seriesKey,
@@ -530,28 +546,30 @@ async function lookupZasshiPrice(input: PriceLookupInput): Promise<PriceLookupRe
     };
   }
 
-  const matched_rows = candidates.slice(0, 10).map(toMatched);
   if (input.graded) {
     const mostRecent = candidates[0];
     return {
       ...base,
       series_matched: matchedSeries,
-      matched_rows,
+      matched_rows: candidates.slice(0, 10).map(toMatched),
       match_count: candidates.length,
       suggested_value_eur: round2((mostRecent.price_usd ?? 0) * rate),
       suggested_basis: "riga_esatta_piu_recente",
       note: `Graded: prezzo della riga esatta più recente per ${label} (${mostRecent.sold_date ?? "data n/d"}, $${mostRecent.price_usd}) convertito in EUR.`,
     };
   }
-  const prices = candidates.map((row) => row.price_usd as number);
+  const { sales: recentSales, withinRecentWindow } = selectRawSales(candidates);
+  const prices = recentSales.map((row) => row.price_usd as number);
   return {
     ...base,
     series_matched: matchedSeries,
-    matched_rows,
-    match_count: candidates.length,
-    suggested_value_eur: round2(median(prices) * rate),
-    suggested_basis: "media_vendite_compatibili",
-    note: `RAW: mediana di ${prices.length} vendite di ${label} convertita in EUR.`,
+    matched_rows: recentSales.map(toMatched),
+    match_count: recentSales.length,
+    suggested_value_eur: round2(average(prices) * rate),
+    suggested_basis: "media_ultime_vendite",
+    note: withinRecentWindow
+      ? `RAW: media aritmetica delle ${prices.length} vendite compatibili più recenti degli ultimi 12 mesi di ${label}, mostrate, convertita in EUR.`
+      : `RAW: meno di ${RAW_MIN_RECENT_SALES} vendite compatibili negli ultimi 12 mesi; media aritmetica delle ${prices.length} vendite più recenti disponibili di ${label}, mostrate, convertita in EUR.`,
   };
 }
 

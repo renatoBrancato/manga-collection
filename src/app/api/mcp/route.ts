@@ -44,7 +44,9 @@ Prima di aggiungere, aggiornare o rivalutare un elemento:
    - RAW e graded non vengono mai mescolati;
    - con OBI e senza OBI non vengono mai mescolati;
    - per un graded viene usato lo stesso volume e lo stesso voto.
-3. Per i RAW il tool restituisce la media delle vendite compatibili. Per i
+3. Per i RAW il tool restituisce la media aritmetica fino a 10 vendite
+   compatibili degli ultimi 12 mesi. Se nell'ultimo anno ce ne sono meno di 3,
+   allarga il campione alle 10 più recenti disponibili e lo segnala nelle note. Per i
    graded restituisce il prezzo della riga esatta corrispondente a volume e
    voto: non fare medie tra graded diversi e non usare una fascia differente.
 4. Usa 'suggested_value_eur' come 'estimated_value' (è già convertito in EUR)
@@ -246,7 +248,7 @@ function buildServer(userId: string) {
     {
       title: "Cerca il valore di mercato su West Blue",
       description:
-        `Interroga direttamente il Manga Price Tracker di West Blue (${PRICE_TRACKER_URL}) e restituisce le vendite compatibili con il pezzo, con il valore suggerito già convertito in EUR. Usa SEMPRE questo tool per i prezzi: la pagina carica i dati via JavaScript, quindi la navigazione web non riesce a leggerli. Per i graded restituisce la riga esatta con stesso volume e voto; per i RAW la media delle vendite compatibili. Quando il tracker non ha un prezzo RAW (volumi non tracciati, edizioni non giapponesi, zashi recenti) ripiega sulla mediana degli annunci eBay attivi (provider "ebay"): dillo all'utente. Se nemmeno eBay basta, il valore resta manuale.`,
+        `Interroga direttamente il Manga Price Tracker di West Blue (${PRICE_TRACKER_URL}) e restituisce le vendite compatibili con il pezzo, con il valore suggerito già convertito in EUR. Usa SEMPRE questo tool per i prezzi: la pagina carica i dati via JavaScript, quindi la navigazione web non riesce a leggerli. Per i graded restituisce la riga esatta con stesso volume e voto; per i RAW restituisce la media aritmetica fino a 10 vendite compatibili degli ultimi 12 mesi, mostrate in matched_rows. Se nell'ultimo anno ce ne sono meno di 3, allarga il campione alle 10 più recenti disponibili e lo segnala nelle note. Quando il tracker non ha un prezzo RAW (volumi non tracciati, edizioni non giapponesi, zashi recenti) ripiega sulla mediana degli annunci eBay attivi (provider "ebay"): dillo all'utente. Se nemmeno eBay basta, il valore resta manuale.`,
       inputSchema: {
         series: z.string().describe("Nome della serie in inglese, es. 'Attack on Titan'"),
         volume: z.number().optional().describe("Numero del volume"),
@@ -303,7 +305,7 @@ function buildServer(userId: string) {
     {
       title: "Rivaluta la collezione",
       description:
-        `Rivaluta ed AGGIORNA in un'unica chiamata tutti i pezzi della collezione leggendo direttamente ${PRICE_TRACKER_URL}. Il calcolo avviene sul server (mediana per i RAW, riga esatta per i graded) e i valori vengono salvati subito: NON chiamare lookup_market_price o update_manga_item per gli stessi pezzi dopo questo tool. Restituisce il riepilogo da mostrare all'utente.`,
+        `Rivaluta ed AGGIORNA in un'unica chiamata tutti i pezzi della collezione leggendo direttamente ${PRICE_TRACKER_URL}. Il calcolo avviene sul server (media aritmetica fino a 10 vendite RAW compatibili degli ultimi 12 mesi; se sono meno di 3, usa le 10 più recenti disponibili e lo segnala; prezzo della riga esatta per i graded) e i valori vengono salvati subito: NON chiamare lookup_market_price o update_manga_item per gli stessi pezzi dopo questo tool. Restituisce il riepilogo da mostrare all'utente.`,
       inputSchema: {
         scope: z
           .enum(["all", "missing_value"])
