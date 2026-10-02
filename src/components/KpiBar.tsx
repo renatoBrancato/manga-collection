@@ -1,5 +1,6 @@
 import type { MangaItem } from "@/lib/types";
 import ObiIcon from "./ObiIcon";
+import { formatMoney } from "@/lib/money";
 
 /**
  * Icone a tratto disegnate a mano: le emoji rendono in modo diverso su ogni
@@ -14,7 +15,7 @@ const icon = {
   crown: "M4.6 18.6h14.8 M4 7.2l3.8 3.4L12 5l4.2 5.6L20 7.2l-1.4 8.6H5.4L4 7.2Z",
 };
 function formatCurrency(value: number) {
-  return value.toLocaleString("it-IT", { style: "currency", currency: "EUR" });
+  return formatMoney(value);
 }
 
 /**

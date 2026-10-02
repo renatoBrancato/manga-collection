@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { MangaItem } from "@/lib/types";
 import CoverImage from "@/components/CoverImage";
 import ObiIcon from "@/components/ObiIcon";
+import { formatMoney } from "@/lib/money";
 import EditItemModal from "@/components/EditItemModal";
 import ItemHistoryModal from "@/components/ItemHistoryModal";
 import DeleteItemDialog from "@/components/DeleteItemDialog";
@@ -529,10 +530,7 @@ export default function ItemsTable({
                 >
                   <span className="truncate">
                     {item.estimated_value != null
-                      ? item.estimated_value.toLocaleString("it-IT", {
-                          style: "currency",
-                          currency: item.currency || "EUR",
-                        })
+                      ? formatMoney(item.estimated_value, item.currency)
                       : "-"}
                   </span>
                   <ChangeBadge
@@ -606,7 +604,7 @@ function MarketSummary({
           <span className="mr-2 text-xs font-sans font-medium uppercase tracking-wider text-slate-500">Variazione</span>
           <span className={tone}>
             {sign}
-            {Math.abs(delta).toLocaleString("it-IT", { style: "currency", currency: "EUR" })}
+            {formatMoney(Math.abs(delta))}
             {percent != null && ` (${sign}${Math.abs(percent).toLocaleString("it-IT", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}%)`}
           </span>
         </span>

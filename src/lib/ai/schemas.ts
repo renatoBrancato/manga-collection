@@ -25,7 +25,7 @@ const mangaFields = {
   condition_estimate: nullableText,
   language: nullableText,
   estimated_value: nullableNumber,
-  currency: z.string().trim().length(3),
+  currency: z.string().trim().regex(/^[A-Za-z]{3}$/),
   image_url: nullableText,
   notes: nullableText,
 };

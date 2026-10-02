@@ -2,14 +2,13 @@
 
 import type { MangaItem } from "@/lib/types";
 import ObiIcon from "@/components/ObiIcon";
+import { formatMoney, formatMoneyDelta } from "@/lib/money";
 import { type ItemChange, type ItemTrends, type TrendPeriod, itemChange, sparklineValues } from "@/lib/trends";
 
 const FORMAT_LABELS: Record<string, string> = { tankobon: "Tankobon", zashi: "Zashi" };
 
 function euro(value: number, currency = "EUR", signed = false) {
-  const text = Math.abs(value).toLocaleString("it-IT", { style: "currency", currency });
-  if (!signed) return text;
-  return `${value > 0 ? "+" : value < 0 ? "−" : ""}${text}`;
+  return signed ? formatMoneyDelta(value, currency) : formatMoney(Math.abs(value), currency);
 }
 
 /** Sigla in stile borsa: iniziali della serie + numero ("One Piece" #1 → OP 1). */

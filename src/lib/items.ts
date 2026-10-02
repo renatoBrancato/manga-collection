@@ -58,6 +58,18 @@ async function resolveImage<T extends { image_url?: string | null; image_base64?
   return { item };
 }
 
+/**
+ * La valuta finisce dentro Intl.NumberFormat, che lancia un'eccezione se il
+ * codice non è di tre lettere: un valore sporco come "EUR 30" salvato da
+ * Koma faceva andare in errore l'intera dashboard dell'utente, che restava
+ * bianca. Qui ripuliamo il dato prima di scriverlo, scartando tutto ciò che
+ * non è un codice ISO 4217 plausibile.
+ */
+export function normalizeCurrency(value: unknown): string {
+  const code = typeof value === "string" ? value.trim().toUpperCase() : "";
+  return /^[A-Z]{3}$/.test(code) ? code : "EUR";
+}
+
 function toRow(userId: string, item: IncomingItemPayload, source: "manual" | "mcp" | "chat") {
   // "series" è ora il campo principale (nome dell'opera/rivista); "title"
   // resta in DB (colonna NOT NULL, usata anche da vecchie versioni
@@ -83,7 +95,7 @@ function toRow(userId: string, item: IncomingItemPayload, source: "manual" | "mc
     condition_estimate: item.condition_estimate ?? null,
     language: item.language ?? null,
     estimated_value: item.estimated_value ?? null,
-    currency: item.currency ?? "EUR",
+    currency: normalizeCurrency(item.currency),
     image_url: item.image_url ?? null,
     notes: item.notes ?? null,
     source,
@@ -131,7 +143,8 @@ export async function updateItem(
   // are left untouched (this is a true partial update, not an upsert).
   const row: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(resolvedPatch)) {
-    if (value !== undefined) row[key] = value;
+    if (value === undefined) continue;
+    row[key] = key === "currency" ? normalizeCurrency(value) : value;
   }
 
   if (Object.keys(row).length === 0) {

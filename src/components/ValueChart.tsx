@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useMemo, useRef, useState } from "react";
+import { formatMoney } from "@/lib/money";
 
 export type ValuePoint = { day: string; value: number | null };
 
@@ -9,7 +10,7 @@ const PAD_TOP = 10;
 const PAD_BOTTOM = 6;
 
 export function formatEuro(value: number): string {
-  return value.toLocaleString("it-IT", { style: "currency", currency: "EUR" });
+  return formatMoney(value);
 }
 
 export function formatDay(day: string): string {
