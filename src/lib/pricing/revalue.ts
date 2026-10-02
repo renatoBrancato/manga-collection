@@ -113,7 +113,7 @@ async function lookupForItem(item: MangaItem): Promise<PriceLookupResult> {
     grade: item.grading_value,
     hasObi: item.has_obi,
     issue: item.format === "zashi" ? item.issue_number : null,
-    year: item.format === "zashi" ? item.release_year : null,
+    year: item.release_year,
     language: item.language,
     isFirstPrint: item.is_first_print,
     isSpecialEdition: /variant|limited|limitat|celebration|collector|box|deluxe|special/i.test(item.printing_notes ?? ""),

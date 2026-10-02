@@ -120,7 +120,7 @@ const functionTools = [
     type: "function",
     name: "lookup_market_price",
     description:
-      "Legge direttamente il Manga Price Tracker di West Blue e restituisce le vendite compatibili con il pezzo, con il valore suggerito già convertito in EUR. Per gli zashi RAW assenti dal tracker ripiega sugli annunci eBay (provider ebay). È la fonte OBBLIGATORIA per qualsiasi prezzo: usalo sempre invece della ricerca web, che non riesce a leggere le tabelle del tracker.",
+      "Legge direttamente il Manga Price Tracker di West Blue e restituisce le vendite compatibili con il pezzo, con il valore suggerito già convertito in EUR. Per tutti i RAW assenti dal tracker ripiega sugli annunci eBay (provider ebay), con almeno 3 comparabili compatibili; prima stampa, anno, lingua e OBI restringono i comparabili e non si allargano a edizioni diverse se i risultati sono pochi. Gli annunci eBay sono prezzi richiesti, non vendite concluse. È la fonte OBBLIGATORIA per qualsiasi prezzo: usalo sempre invece della ricerca web, che non riesce a leggere le tabelle del tracker.",
     parameters: {
       type: "object",
       properties: {
@@ -134,7 +134,7 @@ const functionTools = [
           type: ["string", "null"],
           description: "Solo zashi: numero della rivista come stampato, es. '36-37'",
         },
-        year: { type: ["integer", "null"], description: "Solo zashi: anno di uscita del numero, es. 2025" },
+        year: { type: ["integer", "null"], description: "Anno di pubblicazione del volume o della rivista, es. 1986" },
         language: {
           type: ["string", "null"],
           description:
@@ -280,6 +280,10 @@ VALUTAZIONE OBBLIGATORIA
   ripiega da solo sugli annunci eBay (provider "ebay") quando West Blue non
   ha un prezzo, e se nemmeno eBay basta il valore resta vuoto da inserire a
   mano;
+- quando noto e verificabile, passa anche year e is_first_print: per una
+  prima stampa il fallback eBay considera solo annunci che la dichiarano
+  esplicitamente e non li sostituisce con ristampe se sono pochi. Non dedurre
+  la prima stampa da un titolo ambiguo; se non è certa, passa null;
 - per gli zashi passa format "zashi", series = nome della rivista in romaji
   ("Weekly Shonen Jump", non 週刊少年ジャンプ), issue_number come stampato
   ("36-37") e year: senza numero e anno il tracker non trova il numero esatto;
@@ -291,8 +295,9 @@ VALUTAZIONE OBBLIGATORIA
 - il campo suggested_value_eur è già convertito in EUR: copialo in
   estimated_value e imposta currency EUR;
 - riporta in notes la base usata (suggested_basis) e la fonte: West Blue,
-  oppure "annunci eBay" se provider = "ebay" (succede per zashi RAW che West
-  Blue non traccia: è una mediana di prezzi richiesti, dillo all'utente);
+  oppure "annunci eBay" se provider = "ebay" (succede quando West Blue non
+  traccia il volume RAW o per le edizioni non giapponesi: è una mediana di
+  prezzi richiesti e non di vendite concluse, dillo all'utente);
 - solo se suggested_value_eur è null lascia estimated_value vuoto e scrivi in
   notes che non esistono vendite compatibili.
 

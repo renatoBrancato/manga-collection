@@ -27,6 +27,8 @@ type EbayItem = {
   itemId: string;
   title: string;
   price?: { value: string; currency: string };
+  condition?: string;
+  conditionDescription?: string;
   itemWebUrl?: string;
 };
 
@@ -51,6 +53,11 @@ const MAGAZINE_TERMS: Array<{ test: RegExp; query: string; title: RegExp }> = [
 ];
 
 const GRADED = /\b(psa|bgs|cgc|graded|slab(bed)?)\b/i;
+const EXPLICIT_GRADING =
+  /\b(psa|bgs|cgc|cbcs|sgc|pgx|slab(?:bed)?|encapsulated|grade(?:d)?\s+\d{1,2}(?:\.\d)?)\b/i;
+const GENERIC_GRADED = /\bgraded\b/i;
+const OBI_PRESENT = /\b(?:with|w\/|includes?|including)?\s*obi\b|obi付き|帯付き/i;
+const OBI_ABSENT = /\b(?:no|without|missing)\s+(?:the\s+)?obi\b|obiなし|帯なし/i;
 const NOT_A_SINGLE_ISSUE =
   /\b(lot|lots|set of|bundle|complete set|reprint|replica|facsimile|poster only|card only|only card|no magazine|cover only|clipping|cut ?out|comics|tankobon|\d\s*sets?)\b|\d\s*set\b|まとめ|セット|冊/i;
 
@@ -232,7 +239,7 @@ const EDITION_MARKERS: Record<string, string> = {
   ja: "japanese|japan|jpn|jp|giapponese|japonais|japanisch|japon[eé]s|jump comics|shueisha",
   it: "italian[oa]?|ita|italien|italienisch|star comics|planet manga|panini|j-?pop|edizione|ristampa",
   en: "english|inglese|anglais|englisch|ingl[eé]s|viz|paperback|hardcover|by",
-  fr: "french|francese|fran[cç]ais|franz[oö]sisch|franc[eé]s|tome|gl[eé]nat|pika|neuf|[eé]dition",
+  fr: "french|francese|fran[cç]ais|franz[oö]sisch|franc[eé]s|tome|gl[eé]nat|pika|neuf",
   de: "german|deutsch|tedesc[oa]|allemand|alem[aá]n|band|taschenbuch|carlsen|egmont|auflage|zustand|buch",
   es: "spanish|spagnol[oa]|espagnol|spanisch|espa[nñ]ol|planeta|tomo|ivrea|norma editorial",
 };
@@ -301,7 +308,7 @@ export function isJapaneseEdition(language: string | null | undefined): boolean 
 // Edizioni speciali: prezzo diverso dal volume normale, contano solo se il
 // pezzo stesso è un'edizione speciale.
 const SPECIAL_EDITION =
-  /\b(variant|celebration|collector'?s?|box|limited|limitata|gold|deluxe|cofanetto|coffret|sonderausgabe|special edition|edizione speciale)\b/i;
+  /\b(variant|celebration|collector'?s?|box|limited|limitata|gold|deluxe|cofanetto|coffret|sonderausgabe|special edition|edizione speciale|complete edition|final edition)\b/i;
 const FIRST_PRINT =
   /\b(1st print(ing)?|first print(ing)?|first edition|1st edition|1st ed|prima edizione|prima stampa|1\.\s*auflage|erstauflage|premi[eè]re [eé]dition|primera edici[oó]n)\b|初版/i;
 // Codici di carte collezionabili (es. OP05-100).
@@ -331,7 +338,23 @@ function foldText(value: string): string {
 const SPIN_OFF =
   /\b(super|sd|z|gt|kai|daima|heroes|full ?colou?r|colou?r(?: walk)?|kanzenban|ultimate|perfect edition|gaiden|spin-?off|databook|data book|guide|fanbook|novel|romanzo|roman|film|movie|anime|party|saga|cycle|ciclo|academy|illustrations|culture|io sono|encyclopedia|enciclopedia|quiz|cookbook|ricettario)\b/;
 
-export function titleMatchesVolume(title: string, series: string, volume: number): boolean {
+const SERIES_DERIVATIVES: Array<{ series: RegExp; derivative: RegExp }> = [
+  {
+    series: /^saint seiya$/,
+    derivative:
+      /\b(lost canvas|myth of hades|saintia sho|episode g|next dimension|rerise of poseidon|final edition|omega|time odyssey|dark wing)\b/i,
+  },
+];
+
+function listingHasObi(title: string): boolean {
+  return OBI_PRESENT.test(title) && !OBI_ABSENT.test(title);
+}
+
+function isDerivativeListing(title: string, series: string): boolean {
+  return SERIES_DERIVATIVES.some(({ series: matchesSeries, derivative }) => matchesSeries.test(foldText(series)) && derivative.test(foldText(title)));
+}
+
+export function titleMatchesVolume(title: string, series: string, volume: number, year?: number | null): boolean {
   let rest = ` ${foldText(title)} `;
   const seriesWords = foldText(series)
     .replace(/\bno\.?\s*(?=\d)/g, "")
@@ -339,6 +362,7 @@ export function titleMatchesVolume(title: string, series: string, volume: number
     .map((word) => word.replace(/[#.°]/g, ""))
     .filter((word) => word.length >= 2 || /\d/.test(word));
   if (seriesWords.length === 0) return false;
+  if (isDerivativeListing(title, series)) return false;
   for (const word of seriesWords) {
     const pattern = new RegExp(`(^|[^a-z0-9])(?:no\\.?\\s*|#)?${word}(?=$|[^a-z0-9])`);
     if (!pattern.test(rest)) return false;
@@ -350,6 +374,7 @@ export function titleMatchesVolume(title: string, series: string, volume: number
   if (SPIN_OFF.test(rest)) return false;
   // "1. Auflage", "2nd print": numeri che indicano la stampa, non il volume.
   rest = rest.replace(/\b\d{1,2}\s*\.?\s*(auflage|aufl|edizione|ed|ristampa|print(ing)?|stampa)\b/g, " ");
+  if (year) rest = rest.replace(new RegExp(`(?<!\\d)${year}(?!\\d)`, "g"), " ");
   const numbers = [...rest.matchAll(/(?<![\w.])(\d{1,3})(?![\w%]|\.\d)/g)].map((match) => Number(match[1]));
   return numbers.length > 0 && numbers.every((value) => value === volume);
 }
@@ -357,13 +382,23 @@ export function titleMatchesVolume(title: string, series: string, volume: number
 export async function lookupEbayVolume(input: {
   series: string;
   volume: number;
+  year?: number | null;
   language: string | null | undefined;
   usdToEur: number;
   isFirstPrint?: boolean | null;
+  hasObi?: boolean | null;
   isSpecialEdition?: boolean;
 }): Promise<EbayZasshiResult> {
   const profile = languageProfile(input.language);
-  const query = [input.series, input.volume, profile.queryExtra].filter(Boolean).join(" ");
+  const query = [
+    input.series,
+    input.volume,
+    input.year,
+    input.isFirstPrint === true ? "first print" : null,
+    profile.queryExtra,
+  ]
+    .filter(Boolean)
+    .join(" ");
   const search_url = `https://${profile.domain}/sch/i.html?${new URLSearchParams({ _nkw: query })}`;
   const empty = { listings: [], value_eur: null, search_url };
   if (!ebayConfigured()) return { ...empty, configured: false, note: "eBay non configurato." };
@@ -385,13 +420,15 @@ export async function lookupEbayVolume(input: {
     for (const item of items) {
       // Titolo originale + versione senza accenti: \b non riconosce "é" come lettera.
       const text = `${item.title} ${foldText(item.title)}`;
-      if (!item.price || GRADED.test(text) || NOT_A_SINGLE_VOLUME.test(text)) continue;
+      if (!item.price || isGradedVolumeListing(item) || NOT_A_SINGLE_VOLUME.test(text)) continue;
       if (CARD_CODE.test(item.title)) continue;
       if (!input.isSpecialEdition && SPECIAL_EDITION.test(text)) continue;
       if (input.isFirstPrint === false && FIRST_PRINT.test(text)) continue;
+      if (input.hasObi === false && listingHasObi(text)) continue;
+      if (input.hasObi === true && !listingHasObi(text)) continue;
       if (profile.exclude.test(text) || !isbnMatchesEdition(item.title, profile.code)) continue;
       if (profile.require && !profile.require.test(text)) continue;
-      if (!titleMatchesVolume(item.title, input.series, input.volume)) continue;
+      if (!titleMatchesVolume(item.title, input.series, input.volume, input.year)) continue;
       const amount = Number(item.price.value);
       if (!Number.isFinite(amount) || amount <= 0) continue;
       const currency = item.price.currency;
@@ -406,10 +443,8 @@ export async function lookupEbayVolume(input: {
     let printLabel = "";
     if (input.isFirstPrint === true) {
       const firstPrints = listings.filter((listing) => FIRST_PRINT.test(listing.title));
-      if (firstPrints.length >= MIN_LISTINGS) {
-        listings = firstPrints;
-        printLabel = ", prima stampa";
-      }
+      listings = firstPrints;
+      printLabel = ", prima stampa";
     }
     return summarize(
       listings,
@@ -419,6 +454,19 @@ export async function lookupEbayVolume(input: {
   } catch (cause) {
     return { ...empty, configured: true, note: cause instanceof Error ? cause.message : "errore eBay." };
   }
+}
+
+function isGradedVolumeListing(item: EbayItem): boolean {
+  const text = `${item.title} ${item.conditionDescription ?? ""}`;
+  if (EXPLICIT_GRADING.test(text)) return true;
+
+  // Alcuni venditori aggiungono "graded" come parola SEO al titolo di un
+  // volume RAW. Lo accettiamo solo con una condizione eBay RAW/used e un
+  // ulteriore indizio RAW nel testo; senza entrambi, scartiamo l'annuncio.
+  if (!GENERIC_GRADED.test(text)) return false;
+  const rawCondition = /^(acceptable|good|very good|like new|used|pre-owned)$/i.test(item.condition?.trim() ?? "");
+  const rawEvidence = /\b(raw|ungraded|not graded|no slab|unslabbed|used|pre-owned)\b/i.test(text);
+  return !(rawCondition && rawEvidence);
 }
 
 function summarize(

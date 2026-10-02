@@ -600,9 +600,11 @@ async function withEbayFallback(input: PriceLookupInput, tracker: PriceLookupRes
     ebay = await lookupEbayVolume({
       series: input.series,
       volume: input.volume,
+      year: input.year,
       language: input.language,
       usdToEur: tracker.usd_eur_rate,
       isFirstPrint: input.isFirstPrint,
+      hasObi: input.hasObi,
       isSpecialEdition: input.isSpecialEdition,
     });
     label = isJapaneseEdition(input.language) ? "di questo volume" : "per questa edizione";

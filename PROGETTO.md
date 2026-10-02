@@ -225,12 +225,17 @@ giapponesi, quindi per un volume italiano/francese/tedesco/spagnolo/inglese
 si va direttamente su eBay, sul mercato della lingua (ebay.it con venditori
 IT, ebay.fr, ebay.de, ebay.es; inglese su ebay.com). La ricerca usa le
 categorie "Volumi singoli" manga (259109) e Libri (267) e tiene solo i titoli
-con la serie e il solo numero richiesto (niente lotti, spin-off, variant,
-carte, gadget, edizioni in altre lingue). Se un volume è segnato come non
-prima stampa, gli annunci "prima edizione" vengono esclusi; se è prima
-stampa si usano solo quelli, quando sono almeno 3. Se nemmeno eBay trova
-almeno 3 annunci compatibili, il valore resta quello manuale (il cron
-mantiene il precedente).
+con la serie e il solo numero richiesto (l'anno è escluso dal conteggio del
+volume), niente lotti, spin-off/serie derivate, variant, carte, gadget,
+edizioni in altre lingue o slab esplicite. Un generico "graded" nel titolo
+non basta a scartare un annuncio se eBay lo classifica RAW/used e il testo
+contiene un ulteriore indizio RAW; senza entrambe le indicazioni viene escluso.
+Se il volume è segnato come
+prima stampa, si usano solo annunci che la dichiarano esplicitamente e non
+si ripiega su ristampe quando sono pochi. Il calcolo richiede almeno 3
+annunci compatibili; altrimenti il valore resta quello manuale (il cron
+mantiene il precedente). Gli annunci attivi eBay sono prezzi richiesti, non
+vendite concluse.
 
 Decisioni prese sul modello dati:
 - Rimosso il vecchio campo `status` (posseduto/in lettura/completato/da

@@ -248,7 +248,7 @@ function buildServer(userId: string) {
     {
       title: "Cerca il valore di mercato su West Blue",
       description:
-        `Interroga direttamente il Manga Price Tracker di West Blue (${PRICE_TRACKER_URL}) e restituisce le vendite compatibili con il pezzo, con il valore suggerito già convertito in EUR. Usa SEMPRE questo tool per i prezzi: la pagina carica i dati via JavaScript, quindi la navigazione web non riesce a leggerli. Per i graded restituisce la riga esatta con stesso volume e voto; per i RAW restituisce la media aritmetica fino a 10 vendite compatibili degli ultimi 12 mesi, mostrate in matched_rows. Se nell'ultimo anno ce ne sono meno di 3, allarga il campione alle 10 più recenti disponibili e lo segnala nelle note. Quando il tracker non ha un prezzo RAW (volumi non tracciati, edizioni non giapponesi, zashi recenti) ripiega sulla mediana degli annunci eBay attivi (provider "ebay"): dillo all'utente. Se nemmeno eBay basta, il valore resta manuale.`,
+        `Interroga direttamente il Manga Price Tracker di West Blue (${PRICE_TRACKER_URL}) e restituisce le vendite compatibili con il pezzo, con il valore suggerito già convertito in EUR. Usa SEMPRE questo tool per i prezzi: la pagina carica i dati via JavaScript, quindi la navigazione web non riesce a leggerli. Per i graded restituisce la riga esatta con stesso volume e voto; per i RAW restituisce la media aritmetica fino a 10 vendite compatibili degli ultimi 12 mesi, mostrate in matched_rows. Se nell'ultimo anno ce ne sono meno di 3, allarga il campione alle 10 più recenti disponibili e lo segnala nelle note. Quando il tracker non ha un prezzo RAW (volumi non tracciati, edizioni non giapponesi, zashi recenti) ripiega sulla mediana di almeno 3 annunci eBay attivi (provider "ebay"). Passa anno, prima stampa e OBI quando noti: se è richiesta la prima stampa usa solo annunci che la dichiarano esplicitamente; non allargare a ristampe. Se non ci sono almeno 3 comparabili compatibili, non viene suggerito un prezzo. Gli annunci eBay sono prezzi richiesti, non vendite concluse: dillo all'utente.`,
       inputSchema: {
         series: z.string().describe("Nome della serie in inglese, es. 'Attack on Titan'"),
         volume: z.number().optional().describe("Numero del volume"),
@@ -260,7 +260,7 @@ function buildServer(userId: string) {
           .string()
           .optional()
           .describe("Solo zashi: numero della rivista come stampato, es. '36-37'. Con series = nome della rivista in romaji"),
-        year: z.number().int().optional().describe("Solo zashi: anno di uscita del numero, es. 2025"),
+        year: z.number().int().optional().describe("Anno di pubblicazione del volume (o della rivista), es. 1986"),
         language: z
           .string()
           .optional()
