@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { formatMoney } from "@/lib/money";
 
 export type ValuePoint = { day: string; value: number | null };
@@ -27,15 +27,7 @@ export function formatDay(day: string): string {
  * restano distanziati correttamente. I valori nulli (pezzo rimosso)
  * interrompono la linea.
  */
-export default function ValueChart({
-  points,
-  height = 150,
-  renderTooltip,
-}: {
-  points: ValuePoint[];
-  height?: number;
-  renderTooltip?: (point: ValuePoint) => ReactNode;
-}) {
+export default function ValueChart({ points, height = 150 }: { points: ValuePoint[]; height?: number }) {
   const gradientId = `value-gradient-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const svgRef = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<number | null>(null);
@@ -181,7 +173,6 @@ export default function ValueChart({
             {active.point.value != null ? formatEuro(active.point.value) : "Rimosso"}
           </div>
           <div className="text-slate-400">{formatDay(active.point.day)}</div>
-          {renderTooltip?.(active.point)}
         </div>
       )}
     </div>
