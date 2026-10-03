@@ -89,6 +89,7 @@ export default function StockList({
   period,
   readOnly,
   onOpen,
+  onDetails,
   onEdit,
   onDelete,
 }: {
@@ -97,6 +98,7 @@ export default function StockList({
   period: TrendPeriod;
   readOnly: boolean;
   onOpen: (item: MangaItem) => void;
+  onDetails: (item: MangaItem) => void;
   onEdit: (item: MangaItem) => void;
   onDelete: (item: MangaItem) => void;
 }) {
@@ -147,10 +149,18 @@ export default function StockList({
                 </span>
                 <div className="min-w-0">
                   <p className="flex items-center gap-2 truncate font-medium text-slate-100">
-                    <span className="truncate">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onDetails(item);
+                      }}
+                      title="Mostra dettagli"
+                      className="truncate text-left hover:text-indigo-300"
+                    >
                       {item.series ?? item.title}
                       {number != null && <span className="text-slate-400"> #{number}</span>}
-                    </span>
+                    </button>
                     {item.is_for_sale && (
                       <span className="shrink-0 rounded bg-rose-500 px-1.5 py-px text-[9px] font-bold uppercase tracking-wider text-white">
                         In vendita

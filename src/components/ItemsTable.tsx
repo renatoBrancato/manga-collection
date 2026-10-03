@@ -8,6 +8,7 @@ import CoverImage from "@/components/CoverImage";
 import ObiIcon from "@/components/ObiIcon";
 import { formatMoney } from "@/lib/money";
 import EditItemModal from "@/components/EditItemModal";
+import ItemDetailsModal from "@/components/ItemDetailsModal";
 import ItemHistoryModal from "@/components/ItemHistoryModal";
 import DeleteItemDialog from "@/components/DeleteItemDialog";
 import StockList, { ChangeBadge } from "@/components/StockList";
@@ -55,6 +56,7 @@ export default function ItemsTable({
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MangaItem | null>(null);
+  const [detailsItem, setDetailsItem] = useState<MangaItem | null>(null);
   const [historyItem, setHistoryItem] = useState<MangaItem | null>(null);
   const [deletingItem, setDeletingItem] = useState<MangaItem | null>(null);
   const [view, setView] = useState<ViewMode>("grid");
@@ -442,6 +444,7 @@ export default function ItemsTable({
           period={period}
           readOnly={readOnly}
           onOpen={setHistoryItem}
+          onDetails={setDetailsItem}
           onEdit={setEditingItem}
           onDelete={setDeletingItem}
         />
@@ -471,7 +474,12 @@ export default function ItemsTable({
                 </div>
               )}
 
-              <div className="relative overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setDetailsItem(item)}
+                aria-label={`Mostra dettagli di ${item.series ?? item.title} #${item.volume_number ?? item.issue_number ?? ""}`}
+                className="relative block w-full overflow-hidden text-left focus-visible:outline-2 focus-visible:outline-indigo-400"
+              >
                 <CoverImage item={item} className="aspect-[2/3] w-full" />
                 {item.is_for_sale && (
                   <span
@@ -481,7 +489,7 @@ export default function ItemsTable({
                     In vendita
                   </span>
                 )}
-              </div>
+              </button>
 
               <div className="flex flex-1 flex-col gap-1 p-2.5 text-xs">
                 <div className="flex items-center justify-between gap-1">
@@ -504,9 +512,14 @@ export default function ItemsTable({
                     )}
                   </span>
                 </div>
-                <p className="line-clamp-2 font-medium text-slate-100" title={item.series ?? item.title}>
+                <button
+                  type="button"
+                  onClick={() => setDetailsItem(item)}
+                  className="line-clamp-2 text-left font-medium text-slate-100 hover:text-indigo-300"
+                  title="Mostra dettagli"
+                >
                   {item.series ?? item.title}
-                </p>
+                </button>
                 <p className="truncate text-slate-400">
                   {(item.volume_number ?? item.issue_number) != null
                     ? `#${item.volume_number ?? item.issue_number}`
@@ -556,6 +569,20 @@ export default function ItemsTable({
         </div>
       )}
 
+      {detailsItem && (
+        <ItemDetailsModal
+          item={detailsItem}
+          onClose={() => setDetailsItem(null)}
+          onEdit={readOnly ? undefined : () => {
+            setEditingItem(detailsItem);
+            setDetailsItem(null);
+          }}
+          onHistory={() => {
+            setHistoryItem(detailsItem);
+            setDetailsItem(null);
+          }}
+        />
+      )}
       {editingItem && <EditItemModal item={editingItem} onClose={() => setEditingItem(null)} />}
       {deletingItem && (
         <DeleteItemDialog

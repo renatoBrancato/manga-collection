@@ -20,6 +20,11 @@ valore economico. L'utente può aggiungere i volumi:
    compresse nel browser, caricate su Supabase Storage e passate a OpenAI
    come URL per l'analisi vision.
 
+La copertina o il titolo aprono una scheda in sola lettura con metadati,
+stampa, OBI, stato, valore e note, anche nella collezione pubblica. Il pennino
+resta dedicato alla modifica; il valore apre lo storico. Nella scheda il
+proprietario ha anche un pulsante per passare alla modifica.
+
 Deploy pubblico: **https://manga-collection-seven.vercel.app**
 Repo: `https://github.com/renatoBrancato/manga-collection`
 
