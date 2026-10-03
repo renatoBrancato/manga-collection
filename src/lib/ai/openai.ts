@@ -1,5 +1,5 @@
 import type { MangaItem } from "@/lib/types";
-import { checkIssueNumber, lookupMarketPrice } from "@/lib/pricing/westblue";
+import { checkIssueNumber, lookupMarketPrice, magazineKey } from "@/lib/pricing/westblue";
 import { revalueUserCollection } from "@/lib/pricing/revalue";
 import {
   MAX_CHAT_IMAGES,
@@ -120,7 +120,7 @@ const functionTools = [
     type: "function",
     name: "verify_series_identity",
     description:
-      "Verifica un manga fotografato confrontando la trascrizione esatta del logo con il catalogo AniList. La fonte web può usare il titolo originale, la sua traslitterazione o il nome canonico, e deve supportare il volume. Il valore canonical_series fornito è solo una proposta: usa sempre canonical_series restituito da questo tool, che può correggerlo. Obbligatorio prima del prezzo e dell'aggiunta.",
+      "Verifica il titolo fotografato: per i tankobon usa AniList, per gli zashi gli alias delle riviste e la fonte web, non AniList. La fonte può usare il titolo originale, la traslitterazione o il nome canonico. Per una rivista volume_number deve essere null: cerca separatamente numero del fascicolo e anno. Usa sempre canonical_series restituito. Obbligatorio prima del prezzo e dell'aggiunta.",
     parameters: {
       type: "object",
       properties: {
@@ -301,6 +301,11 @@ Prima di aggiungere:
   mai una traduzione libera; solo dopo chiama
   lookup_market_price e poi prepare_add_manga. I tool rifiutano prezzo o
   salvataggio se l'identità non è stata verificata prima;
+- per gli zashi verifica il nome della RIVISTA, non il manga in copertina:
+  verify_series_identity usa gli alias delle riviste e la fonte web, senza
+  richiedere un match AniList. Passa volume_number null; numero del fascicolo
+  e anno restano issue_number e year nella ricerca prezzi. Non chiedere di
+  scegliere il nome se il tool conferma già la rivista;
 - non chiedere all'utente di scegliere il nome canonico prima di aver tentato
   questa verifica: se la prima ricerca è inconcludente, prova una ricerca
   mirata con il nome canonico/traslitterato e il volume; chiedi conferma solo
@@ -698,6 +703,20 @@ type PhotoPiece = {
 type WebSearchEvidence = { query: string; sources: Array<{ title?: string; url: string }> };
 type CanonicalTitleResult = { canonicalSeries: string | null; error?: string };
 const canonicalTitleCache = new Map<string, { value: CanonicalTitleResult; expiresAt: number }>();
+
+function resolveCanonicalMagazineTitle(observedTitle: string): CanonicalTitleResult {
+  const titles: Record<string, string> = {
+    "weekly shonen jump": "Weekly Shonen Jump",
+    "monthly shonen jump": "Monthly Shonen Jump",
+    "jump square": "Jump Square",
+    "akamaru jump": "Akamaru Jump",
+    "weekly young jump": "Weekly Young Jump",
+    "weekly shonen magazine": "Weekly Shonen Magazine",
+    "weekly shonen sunday": "Weekly Shonen Sunday",
+    "corocoro comic": "Corocoro Comic",
+  };
+  return { canonicalSeries: titles[magazineKey(observedTitle)] ?? null };
+}
 
 function normalizeIdentityText(value: string): string {
   return value.normalize("NFKC").toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
@@ -1114,11 +1133,17 @@ export async function runCollectionChat({
         } else if (!matchingPhoto && !matchingContext && !fallbackPhotoIdentity) {
           problem = "Il titolo o il volume non corrispondono all'elemento identificato nella foto o nel contesto corrente.";
         } else {
-          const resolution = await resolveCanonicalMangaTitle(observedTitle, proposedSeries);
+          const isMagazine = matchingPhoto?.format === "zashi" ||
+            (matchingContext && recentContext?.format === "zashi");
+          const resolution = isMagazine
+            ? resolveCanonicalMagazineTitle(observedTitle)
+            : await resolveCanonicalMangaTitle(observedTitle, proposedSeries);
           if (resolution.error) {
             problem = resolution.error;
           } else if (!resolution.canonicalSeries) {
-            problem = "Il titolo originale non ha una corrispondenza esatta nel catalogo manga. Non inventare il nome canonico.";
+            problem = isMagazine
+              ? "Il titolo della rivista non corrisponde a un alias noto. Serve una conferma del nome della rivista."
+              : "Il titolo originale non ha una corrispondenza esatta nel catalogo manga. Non inventare il nome canonico.";
           } else {
             const normalizedCanonicalSeries = normalizeIdentityText(resolution.canonicalSeries);
             const matchingSource = webSearchEvidence.find(
@@ -1155,7 +1180,7 @@ export async function runCollectionChat({
                   verified: false,
                   error: problem,
                   instruction:
-                    "Cerca il titolo originale e il numero oppure il nome canonico candidato e il numero. Il catalogo manga verifica separatamente la corrispondenza esatta tra titolo originale e nome canonico; se non la trova, chiedi all'utente.",
+                    "Cerca il titolo originale oppure il nome canonico e il numero. Per i tankobon il catalogo AniList verifica l'identità; per gli zashi si usano gli alias della rivista e una fonte web, non AniList. Chiedi chiarimenti solo se la verifica appropriata non conferma l'identità.",
                 }
               : {
                   verified: true,

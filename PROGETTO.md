@@ -235,8 +235,12 @@ eseguita almeno una ricerca web. Le ricerche sono limitate per contenere
 latenza e costi; se West Blue non ha comparabili compatibili il valore resta
 vuoto e il motivo viene salvato nelle note, senza inventare un prezzo.
 
-Zashi: il dataset `sold_zasshi` è indicizzato per contenuto, quindi la
-ricerca filtra su tutte le righe per rivista (alias giapponesi inclusi, es.
+Zashi: la verifica del nome usa gli alias della rivista e una fonte web, non il
+catalogo manga AniList. Il manga raffigurato in copertina non sostituisce
+il nome della rivista. Nella verifica `volume_number` resta nullo; numero
+del fascicolo e anno vengono passati alla ricerca prezzi.
+Il dataset `sold_zasshi` è indicizzato per contenuto, quindi la ricerca
+filtra su tutte le righe per rivista (alias giapponesi inclusi, es.
 週刊少年ジャンプ → Weekly Shonen Jump), numero del fascicolo e anno. Se lo
 stesso numero esiste in più annate e l'anno manca, Koma lo chiede invece di
 mescolare le vendite. Per un RAW senza vendite RAW le graded sono citate
