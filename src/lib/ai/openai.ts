@@ -771,7 +771,7 @@ async function resolveCanonicalMangaTitle(
       manga.title?.english,
       ...(manga.synonyms ?? []),
     ].filter((title): title is string => Boolean(title?.trim()));
-    return titles.some((title) => normalizeIdentityText(title) === key);
+    return titles.some((title) => normalizeIdentityText(title) === observedKey);
   });
   const proposedKey = normalizeIdentityText(proposedSeries);
   const proposedMatches = matches.filter((manga) =>
@@ -781,7 +781,9 @@ async function resolveCanonicalMangaTitle(
       manga?.title?.native,
     ].some((title) => title && normalizeIdentityText(title) === proposedKey)
   );
-  const manga = proposedMatches.length === 1 ? proposedMatches[0] : matches[0];
+  const manga = proposedMatches.length === 1
+    ? proposedMatches[0]
+    : matches.length === 1 ? matches[0] : undefined;
   const canonicalSeries =
     manga?.title?.english?.trim() || manga?.title?.romaji?.trim() || manga?.title?.native?.trim() || null;
   if (!canonicalSeries) return { canonicalSeries: null };
