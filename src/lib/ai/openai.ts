@@ -439,7 +439,15 @@ async function createResponse(body: Record<string, unknown>): Promise<OpenAIResp
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      ...body,
+      ...(Array.isArray(body.tools) && body.tools.some(
+        (tool) => tool && typeof tool === "object" && tool.type === "web_search"
+      ) ? { include: [...new Set([
+        ...(Array.isArray(body.include) ? body.include : []),
+        "web_search_call.action.sources",
+      ])] } : {}),
+    }),
     signal: AbortSignal.timeout(60_000),
   });
 
@@ -706,6 +714,27 @@ type PhotoPiece = {
 };
 
 type WebSearchEvidence = { query: string; sources: Array<{ title?: string; url: string }> };
+
+function collectWebSearchEvidence(item: unknown): WebSearchEvidence[] {
+  if (!item || typeof item !== "object") return [];
+  const action = (item as { action?: { query?: unknown; queries?: unknown; sources?: unknown } }).action;
+  if (!action || !Array.isArray(action.sources)) return [];
+  const queries = [
+    ...(typeof action.query === "string" ? [action.query] : []),
+    ...(Array.isArray(action.queries)
+      ? action.queries.filter((query): query is string => typeof query === "string")
+      : []),
+  ];
+  const sources = action.sources.flatMap((source) => {
+    if (!source || typeof source !== "object") return [];
+    const entry = source as { title?: unknown; url?: unknown };
+    return typeof entry.url === "string"
+      ? [{ ...(typeof entry.title === "string" ? { title: entry.title } : {}), url: entry.url }]
+      : [];
+  });
+  return [...new Set(queries)].map((query) => ({ query, sources }));
+}
+
 type CanonicalTitleResult = { canonicalSeries: string | null; error?: string };
 const canonicalTitleCache = new Map<string, { value: CanonicalTitleResult; expiresAt: number }>();
 
@@ -1090,16 +1119,7 @@ export async function runCollectionChat({
     if (searchCalls.length > 0) {
       usedWebSearch = true;
       for (const item of searchCalls) {
-        const action = (item as { action?: { query?: unknown; sources?: unknown } }).action;
-        if (typeof action?.query !== "string" || !Array.isArray(action.sources)) continue;
-        const sources = action.sources.flatMap((source) => {
-          if (!source || typeof source !== "object") return [];
-          const entry = source as { title?: unknown; url?: unknown };
-          return typeof entry.url === "string"
-            ? [{ ...(typeof entry.title === "string" ? { title: entry.title } : {}), url: entry.url }]
-            : [];
-        });
-        webSearchEvidence.push({ query: action.query, sources });
+        webSearchEvidence.push(...collectWebSearchEvidence(item));
       }
     }
     const calls = response.output.filter((item): item is FunctionCall => item.type === "function_call");
