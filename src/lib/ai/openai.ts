@@ -306,6 +306,11 @@ Prima di aggiungere:
   richiedere un match AniList. Passa volume_number null; numero del fascicolo
   e anno restano issue_number e year nella ricerca prezzi. Non chiedere di
   scegliere il nome se il tool conferma già la rivista;
+- una variante ortografica NON richiede una scelta dell'utente: Weekly Shonen
+  Jump, Weekly Shōnen Jump e 週刊少年ジャンプ indicano la stessa testata.
+  Usa Weekly Shonen Jump, senza chiedere quale scrittura salvare. Non offrire
+  menu di nomi equivalenti; chiedi chiarimenti solo sull'identità della
+  rivista, sul numero o sull'anno se realmente incerti;
 - non chiedere all'utente di scegliere il nome canonico prima di aver tentato
   questa verifica: se la prima ricerca è inconcludente, prova una ricerca
   mirata con il nome canonico/traslitterato e il volume; chiedi conferma solo
@@ -715,7 +720,13 @@ function resolveCanonicalMagazineTitle(observedTitle: string): CanonicalTitleRes
     "weekly shonen sunday": "Weekly Shonen Sunday",
     "corocoro comic": "Corocoro Comic",
   };
-  return { canonicalSeries: titles[magazineKey(observedTitle)] ?? null };
+  const normalized = observedTitle.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+  // Il solo "ジャンプ" non identifica una testata: potrebbe essere parte
+  // del marchio editoriale di un tankobon.
+  const explicitMagazine =
+    /週刊少年ジャンプ|月刊少年ジャンプ|少年ジャンプ|ジャンプスクエア|ジャンプSQ|赤マルジャンプ|ヤングジャンプ|少年マガジン|少年サンデー|コロコロ/i.test(normalized) ||
+    /^(?:weekly shonen jump|shonen jump|monthly shonen jump|jump square|akamaru jump|weekly young jump|weekly shonen magazine|weekly shonen sunday|corocoro comic)$/i.test(normalized.trim());
+  return { canonicalSeries: explicitMagazine ? titles[magazineKey(normalized)] ?? null : null };
 }
 
 function normalizeIdentityText(value: string): string {
@@ -1133,10 +1144,12 @@ export async function runCollectionChat({
         } else if (!matchingPhoto && !matchingContext && !fallbackPhotoIdentity) {
           problem = "Il titolo o il volume non corrispondono all'elemento identificato nella foto o nel contesto corrente.";
         } else {
+          const magazineResolution = resolveCanonicalMagazineTitle(observedTitle);
           const isMagazine = matchingPhoto?.format === "zashi" ||
-            (matchingContext && recentContext?.format === "zashi");
+            (matchingContext && recentContext?.format === "zashi") ||
+            magazineResolution.canonicalSeries !== null;
           const resolution = isMagazine
-            ? resolveCanonicalMagazineTitle(observedTitle)
+            ? magazineResolution
             : await resolveCanonicalMangaTitle(observedTitle, proposedSeries);
           if (resolution.error) {
             problem = resolution.error;
