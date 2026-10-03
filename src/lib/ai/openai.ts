@@ -749,7 +749,8 @@ function resolveCanonicalMagazineTitle(observedTitle: string): CanonicalTitleRes
     "weekly shonen sunday": "Weekly Shonen Sunday",
     "corocoro comic": "Corocoro Comic",
   };
-  const normalized = observedTitle.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+  const normalized = observedTitle.normalize("NFKC").replace(/\p{Script=Latin}+/gu,
+    (word) => word.normalize("NFKD").replace(/[\u0300-\u036f]/g, ""));
   // Il solo "ジャンプ" non identifica una testata: potrebbe essere parte
   // del marchio editoriale di un tankobon.
   const explicitMagazine =
@@ -778,7 +779,15 @@ function sameSeriesIdentity(left: string, right: string): boolean {
 }
 
 function identityKey(title: string, volume: number | null): string {
-  return `${normalizeIdentityText(title)}|${volume ?? ""}`;
+  const magazine = resolveCanonicalMagazineTitle(title).canonicalSeries;
+  return `${normalizeIdentityText(magazine ?? title)}|${volume ?? ""}`;
+}
+
+function sameObservedTitle(left: string, right: string): boolean {
+  if (normalizeIdentityText(left) === normalizeIdentityText(right)) return true;
+  const leftMagazine = resolveCanonicalMagazineTitle(left).canonicalSeries;
+  const rightMagazine = resolveCanonicalMagazineTitle(right).canonicalSeries;
+  return leftMagazine !== null && leftMagazine === rightMagazine;
 }
 
 async function resolveCanonicalMangaTitle(
@@ -929,7 +938,22 @@ async function readPhotos(imageUrls: string[]): Promise<PhotoPiece[] | null> {
       text: { format: { type: "json_schema", name: "photo_reading", strict: true, schema: photoReadingSchema } },
     });
     const parsed = JSON.parse(outputText(response)) as { pieces?: PhotoPiece[] };
-    return Array.isArray(parsed.pieces) && parsed.pieces.length > 0 ? parsed.pieces : null;
+    if (!Array.isArray(parsed.pieces) || parsed.pieces.length === 0) return null;
+    return parsed.pieces.map((piece) => {
+      const magazine = resolveCanonicalMagazineTitle(piece.cover_title_text ?? "").canonicalSeries;
+      if (!magazine) return piece;
+      const issue = piece.issue_number ??
+        (piece.volume_number !== null ? String(piece.volume_number) : null);
+      const checkedIssue = checkIssueNumber(issue);
+      // Il logo identifica la rivista anche quando la visione scambia il fascicolo per un volume.
+      return {
+        ...piece,
+        series: magazine,
+        format: "zashi",
+        issue_number: checkedIssue.problem ? issue : checkedIssue.normalized,
+        volume_number: null,
+      };
+    });
   } catch {
     // In caso di errore la chat prosegue analizzando le foto direttamente.
     return null;
@@ -1145,7 +1169,7 @@ export async function runCollectionChat({
             ? photoPieces?.find(
                 (piece) =>
                   (piece.cover_photo === coverPhoto || piece.photos.includes(coverPhoto)) &&
-                  normalizeIdentityText(piece.cover_title_text ?? "") === normalizeIdentityText(observedTitle) &&
+                  sameObservedTitle(piece.cover_title_text ?? "", observedTitle) &&
                   piece.volume_number === volume
               )
             : undefined;
@@ -1153,8 +1177,7 @@ export async function runCollectionChat({
           coverPhoto === 0 &&
           imageUrls.length === 0 &&
           recentContext &&
-          normalizeIdentityText(recentContext.cover_title_text ?? recentContext.series) ===
-            normalizeIdentityText(observedTitle) &&
+          sameObservedTitle(recentContext.cover_title_text ?? recentContext.series, observedTitle) &&
           recentContext.volume_number === volume;
         const fallbackPhotoIdentity =
           coverPhoto > 0 && imageUrls.length > 0 && !photoPieces && observedTitle.length > 0;
@@ -1292,7 +1315,7 @@ export async function runCollectionChat({
         input: [{
           role: "user",
           content:
-            "Non chiedere ancora conferma all'utente. Per ogni copertina non verificata, cerca sul web il titolo originale completo trascritto dalla copertina e il volume. Se la fonte usa la traslitterazione o il nome canonico proposto invece della scrittura della copertina, cerca anche nome canonico + volume e usa quel risultato. Poi chiama verify_series_identity con la fonte; AniList verificherà separatamente che il titolo originale corrisponda davvero a quel manga. Se il catalogo non conferma la corrispondenza, spiega l'incertezza e chiedi quale nome usare.",
+            "Non chiedere ancora conferma all'utente. Per ogni copertina non verificata, cerca sul web il titolo originale o canonico e il numero. Poi chiama verify_series_identity con una fonte dei risultati. Per un tankobon usa volume_number e la verifica AniList; per uno zashi usa volume_number null, verifica testata, fascicolo e anno con gli alias della rivista e la fonte web, senza AniList. Non chiedere di scegliere fra grafie equivalenti di una testata riconosciuta.",
         }],
       });
       continue;
@@ -1325,8 +1348,7 @@ export async function runCollectionChat({
               ? []
               : photoPieces?.filter(
                   (piece) =>
-                    normalizeIdentityText(piece.cover_title_text ?? "") ===
-                    normalizeIdentityText(requestedCoverTitle)
+                    sameObservedTitle(piece.cover_title_text ?? "", requestedCoverTitle)
                 ) ?? [];
           const exactCoverMatch =
             requestedCoverPhoto === null
