@@ -719,15 +719,21 @@ function identityKey(title: string, volume: number | null): string {
   return `${normalizeIdentityText(title)}|${volume ?? ""}`;
 }
 
-async function resolveCanonicalMangaTitle(observedTitle: string): Promise<CanonicalTitleResult> {
+async function resolveCanonicalMangaTitle(
+  observedTitle: string,
+  proposedSeries: string
+): Promise<CanonicalTitleResult> {
   const key = normalizeIdentityText(observedTitle);
+  if (!key) return { canonicalSeries: null };
   const cached = canonicalTitleCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
 
   const query = `query ($search: String) {
-    Media(search: $search, type: MANGA) {
-      title { romaji english native }
-      synonyms
+    Page(perPage: 25) {
+      media(search: $search, type: MANGA) {
+        title { romaji english native }
+        synonyms
+      }
     }
   }`;
   const response = await fetch("https://graphql.anilist.co", {
@@ -741,9 +747,11 @@ async function resolveCanonicalMangaTitle(observedTitle: string): Promise<Canoni
   }
   const payload = (await response.json()) as {
     data?: {
-      Media?: {
-        title?: { romaji?: string | null; english?: string | null; native?: string | null };
-        synonyms?: string[];
+      Page?: {
+        media?: Array<{
+          title?: { romaji?: string | null; english?: string | null; native?: string | null };
+          synonyms?: string[];
+        } | null>;
       } | null;
     };
     errors?: Array<{ message?: string }>;
@@ -751,18 +759,28 @@ async function resolveCanonicalMangaTitle(observedTitle: string): Promise<Canoni
   if (payload.errors?.length) {
     return { canonicalSeries: null, error: "Catalogo manga non disponibile per questa verifica." };
   }
-  const manga = payload.data?.Media;
-  const titles = [
-    manga?.title?.native,
-    manga?.title?.romaji,
-    manga?.title?.english,
-    ...(manga?.synonyms ?? []),
-  ].filter((title): title is string => Boolean(title?.trim()));
-  if (!titles.some((title) => normalizeIdentityText(title) === key)) {
-    return { canonicalSeries: null };
-  }
+  const matches = (payload.data?.Page?.media ?? []).filter((manga) => {
+    if (!manga) return false;
+    const titles = [
+      manga.title?.native,
+      manga.title?.romaji,
+      manga.title?.english,
+      ...(manga.synonyms ?? []),
+    ].filter((title): title is string => Boolean(title?.trim()));
+    return titles.some((title) => normalizeIdentityText(title) === key);
+  });
+  const proposedKey = normalizeIdentityText(proposedSeries);
+  const proposedMatches = matches.filter((manga) =>
+    [
+      manga?.title?.english,
+      manga?.title?.romaji,
+      manga?.title?.native,
+    ].some((title) => title && normalizeIdentityText(title) === proposedKey)
+  );
+  const manga = proposedMatches.length === 1 ? proposedMatches[0] : matches[0];
   const canonicalSeries =
     manga?.title?.english?.trim() || manga?.title?.romaji?.trim() || manga?.title?.native?.trim() || null;
+  if (!canonicalSeries) return { canonicalSeries: null };
   const value = { canonicalSeries };
   canonicalTitleCache.set(key, { value, expiresAt: Date.now() + 24 * 60 * 60 * 1000 });
   return value;
@@ -1096,7 +1114,7 @@ export async function runCollectionChat({
         } else if (!matchingPhoto && !matchingContext && !fallbackPhotoIdentity) {
           problem = "Il titolo o il volume non corrispondono all'elemento identificato nella foto o nel contesto corrente.";
         } else {
-          const resolution = await resolveCanonicalMangaTitle(observedTitle);
+          const resolution = await resolveCanonicalMangaTitle(observedTitle, proposedSeries);
           if (resolution.error) {
             problem = resolution.error;
           } else if (!resolution.canonicalSeries) {
