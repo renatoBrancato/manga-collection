@@ -120,7 +120,7 @@ const functionTools = [
     type: "function",
     name: "verify_series_identity",
     description:
-      "Verifica un manga fotografato usando la trascrizione esatta del logo, una fonte nei risultati web e il catalogo AniList, che restituisce il titolo inglese o romaji ufficiale. Il valore canonical_series fornito è solo una proposta: usa sempre canonical_series restituito da questo tool, che può correggerlo. Obbligatorio prima del prezzo e dell'aggiunta.",
+      "Verifica un manga fotografato confrontando la trascrizione esatta del logo con il catalogo AniList. La fonte web può usare il titolo originale, la sua traslitterazione o il nome canonico, e deve supportare il volume. Il valore canonical_series fornito è solo una proposta: usa sempre canonical_series restituito da questo tool, che può correggerlo. Obbligatorio prima del prezzo e dell'aggiunta.",
     parameters: {
       type: "object",
       properties: {
@@ -128,7 +128,7 @@ const functionTools = [
         observed_title: { type: "string", description: "Titolo originale trascritto dal logo, non dall'OBI" },
         canonical_series: { type: "string", description: "Nome canonico candidato; il tool lo confronterà con il catalogo ufficiale" },
         volume_number: { type: ["number", "null"] },
-        evidence_text: { type: "string", description: "Estratto del risultato web che contiene il titolo originale e il volume" },
+        evidence_text: { type: "string", description: "Estratto della fonte che supporta il titolo originale o canonico e il volume" },
         evidence_url: { type: "string", description: "URL della fonte mostrata nella ricerca web" },
       },
       required: ["cover_photo", "observed_title", "canonical_series", "volume_number", "evidence_text", "evidence_url"],
@@ -291,17 +291,20 @@ Prima di aggiungere:
   traslitterato proposto dalla lettura visiva e non confondere titolo, autore
   e testo dell'OBI. Se le fonti non confermano la corrispondenza, non salvare
   un nome ipotetico: chiedi all'utente di chiarire il titolo;
-- flusso obbligatorio per una foto: web_search del titolo originale + volume,
-  poi verify_series_identity con titolo originale, volume, estratto e fonte
-  risultante; il tool controlla il catalogo manga AniList e restituisce il
-  titolo inglese ufficiale o, se assente, quello romaji. Usa esattamente il
-  canonical_series restituito, mai una traduzione libera; solo dopo chiama
+- flusso obbligatorio per una foto: cerca sul web il titolo originale + volume.
+  Se i risultati sono indicizzati con una traslitterazione o il nome canonico,
+  cerca anche quel nome + volume: non serve che la fonte ripeta gli stessi
+  caratteri della copertina. Chiama poi verify_series_identity con titolo
+  originale, volume, estratto e fonte; il tool controlla la corrispondenza
+  esatta nel catalogo manga AniList e restituisce il titolo inglese ufficiale
+  o, se assente, quello romaji. Usa esattamente il canonical_series restituito,
+  mai una traduzione libera; solo dopo chiama
   lookup_market_price e poi prepare_add_manga. I tool rifiutano prezzo o
   salvataggio se l'identità non è stata verificata prima;
 - non chiedere all'utente di scegliere il nome canonico prima di aver tentato
   questa verifica: se la prima ricerca è inconcludente, prova una ricerca
-  mirata del titolo originale e del volume; chiedi conferma solo dopo il
-  fallimento esplicito della verifica;
+  mirata con il nome canonico/traslitterato e il volume; chiedi conferma solo
+  se AniList non conferma l'identità o non trovi una fonte utile;
 - non lasciare questi campi vuoti solo perché non sono scritti nel messaggio:
   cercali online, usando foto, serie, numero ed edizione per disambiguare.
 
@@ -723,8 +726,9 @@ async function resolveCanonicalMangaTitle(
   observedTitle: string,
   proposedSeries: string
 ): Promise<CanonicalTitleResult> {
-  const key = normalizeIdentityText(observedTitle);
-  if (!key) return { canonicalSeries: null };
+  const observedKey = normalizeIdentityText(observedTitle);
+  if (!observedKey) return { canonicalSeries: null };
+  const key = `${observedKey}|${normalizeIdentityText(proposedSeries)}`;
   const cached = canonicalTitleCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
 
@@ -1080,16 +1084,10 @@ export async function runCollectionChat({
         const evidenceText = typeof args.evidence_text === "string" ? args.evidence_text.trim() : "";
         const evidenceUrl = typeof args.evidence_url === "string" ? args.evidence_url.trim() : "";
         const validEvidenceUrl = /^https:\/\/\S+$/i.test(evidenceUrl);
-        const matchingSource = webSearchEvidence.find(
-          ({ query, sources }) =>
-            observedTitle.length > 0 &&
-            evidenceText.length > 0 &&
-            validEvidenceUrl &&
-            normalizeIdentityText(query).includes(normalizeIdentityText(observedTitle)) &&
-            (volume === null ||
-              new RegExp(`(?:^|\\D)${volume}(?:\\D|$)`).test(query.normalize("NFKC"))) &&
-            sources.some((source) => source.url === evidenceUrl)
-        );
+        const normalizedObservedTitle = normalizeIdentityText(observedTitle);
+        const normalizedProposedSeries = normalizeIdentityText(proposedSeries);
+        const volumePattern =
+          volume === null ? null : new RegExp(`(?:^|\\D)${volume}(?:\\D|$)`);
         const matchingPhoto =
           coverPhoto > 0
             ? photoPieces?.find(
@@ -1109,8 +1107,8 @@ export async function runCollectionChat({
         const fallbackPhotoIdentity =
           coverPhoto > 0 && imageUrls.length > 0 && !photoPieces && observedTitle.length > 0;
         let problem: string | null = null;
-        if (!usedWebSearch || !matchingSource) {
-          problem = "Non trovo nei risultati web una fonte per il titolo originale e il volume.";
+        if (!usedWebSearch) {
+          problem = "La ricerca web necessaria per verificare il titolo non è stata eseguita.";
         } else if (!matchingPhoto && !matchingContext && !fallbackPhotoIdentity) {
           problem = "Il titolo o il volume non corrispondono all'elemento identificato nella foto o nel contesto corrente.";
         } else {
@@ -1120,11 +1118,31 @@ export async function runCollectionChat({
           } else if (!resolution.canonicalSeries) {
             problem = "Il titolo originale non ha una corrispondenza esatta nel catalogo manga. Non inventare il nome canonico.";
           } else {
-            verifiedIdentities.set(identityKey(observedTitle, volume), {
-              observedTitle,
-              canonicalSeries: resolution.canonicalSeries,
-              volume,
-            });
+            const normalizedCanonicalSeries = normalizeIdentityText(resolution.canonicalSeries);
+            const matchingSource = webSearchEvidence.find(
+              ({ query, sources }) =>
+                observedTitle.length > 0 &&
+                evidenceText.length > 0 &&
+                validEvidenceUrl &&
+                [
+                  normalizedObservedTitle,
+                  normalizedProposedSeries,
+                  normalizedCanonicalSeries,
+                ].some((title) => title.length > 0 && normalizeIdentityText(query).includes(title)) &&
+                (volumePattern === null ||
+                  volumePattern.test(query.normalize("NFKC")) ||
+                  volumePattern.test(evidenceText.normalize("NFKC"))) &&
+                sources.some((source) => source.url === evidenceUrl)
+            );
+            if (!matchingSource) {
+              problem = "Non trovo nei risultati web una fonte per il titolo originale o canonico e il volume.";
+            } else {
+              verifiedIdentities.set(identityKey(observedTitle, volume), {
+                observedTitle,
+                canonicalSeries: resolution.canonicalSeries,
+                volume,
+              });
+            }
           }
         }
         identityVerificationResults.set(
@@ -1135,7 +1153,7 @@ export async function runCollectionChat({
                   verified: false,
                   error: problem,
                   instruction:
-                    "Cerca una fonte sui risultati web che contenga il titolo originale e il numero. Il nome canonico ufficiale non è verificato: se il catalogo non trova una corrispondenza esatta, chiedi all'utente.",
+                    "Cerca il titolo originale e il numero oppure il nome canonico candidato e il numero. Il catalogo manga verifica separatamente la corrispondenza esatta tra titolo originale e nome canonico; se non la trova, chiedi all'utente.",
                 }
               : {
                   verified: true,
@@ -1214,7 +1232,7 @@ export async function runCollectionChat({
         input: [{
           role: "user",
           content:
-            "Non chiedere ancora conferma all'utente. Per ogni copertina non verificata, cerca sul web il titolo originale completo trascritto dalla copertina insieme al volume, poi chiama verify_series_identity con una fonte dei risultati. Se non trovi una fonte affidabile dopo questo tentativo, spiega l'incertezza e chiedi quale nome usare.",
+            "Non chiedere ancora conferma all'utente. Per ogni copertina non verificata, cerca sul web il titolo originale completo trascritto dalla copertina e il volume. Se la fonte usa la traslitterazione o il nome canonico proposto invece della scrittura della copertina, cerca anche nome canonico + volume e usa quel risultato. Poi chiama verify_series_identity con la fonte; AniList verificherà separatamente che il titolo originale corrisponda davvero a quel manga. Se il catalogo non conferma la corrispondenza, spiega l'incertezza e chiedi quale nome usare.",
         }],
       });
       continue;
