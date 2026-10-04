@@ -770,6 +770,22 @@ function normalizeIdentityText(value: string): string {
   return value.normalize("NFKC").toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 }
 
+function identityTitleVariants(value: string): string[] {
+  const normalized = value.normalize("NFKC");
+  const variants = [
+    normalized,
+    ...(normalized.match(
+      /[\p{Script=Latin}\p{N}]+(?:[\s.'’_-]+[\p{Script=Latin}\p{N}]+)*|[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\u30FC]+/gu
+    ) ?? []),
+  ]
+    .map((variant) => variant.trim())
+    .filter((variant) => {
+      const normalizedVariant = normalizeIdentityText(variant);
+      return normalizedVariant.length >= 3 && /\p{L}/u.test(normalizedVariant);
+    });
+  return [...new Map(variants.map((variant) => [normalizeIdentityText(variant), variant])).values()];
+}
+
 function sameSeriesIdentity(left: string, right: string): boolean {
   if (normalizeIdentityText(left) === normalizeIdentityText(right)) return true;
   const ignored = new Set(["of", "the", "no"]);
@@ -801,9 +817,10 @@ async function resolveCanonicalMangaTitle(
   observedTitle: string,
   proposedSeries: string
 ): Promise<CanonicalTitleResult> {
-  const observedKey = normalizeIdentityText(observedTitle);
-  if (!observedKey) return { canonicalSeries: null };
-  const key = `${observedKey}|${normalizeIdentityText(proposedSeries)}`;
+  const observedVariants = identityTitleVariants(observedTitle);
+  if (observedVariants.length === 0) return { canonicalSeries: null };
+  const observedKeys = observedVariants.map(normalizeIdentityText);
+  const key = `${observedKeys.join("|")}|${normalizeIdentityText(proposedSeries)}`;
   const cached = canonicalTitleCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
 
@@ -815,46 +832,56 @@ async function resolveCanonicalMangaTitle(
       }
     }
   }`;
-  const response = await fetch("https://graphql.anilist.co", {
-    method: "POST",
-    headers: { accept: "application/json", "content-type": "application/json" },
-    body: JSON.stringify({ query, variables: { search: observedTitle } }),
-    signal: AbortSignal.timeout(8_000),
-  });
-  if (!response.ok) {
-    return { canonicalSeries: null, error: `Catalogo manga non raggiungibile (${response.status}).` };
-  }
-  const payload = (await response.json()) as {
-    data?: {
-      Page?: {
-        media?: Array<{
-          title?: { romaji?: string | null; english?: string | null; native?: string | null };
-          synonyms?: string[];
-        } | null>;
-      } | null;
-    };
-    errors?: Array<{ message?: string }>;
-  };
-  if (payload.errors?.length) {
-    return { canonicalSeries: null, error: "Catalogo manga non disponibile per questa verifica." };
-  }
-  const matches = (payload.data?.Page?.media ?? []).filter((manga) => {
-    if (!manga) return false;
-    const titles = [
-      manga.title?.native,
-      manga.title?.romaji,
-      manga.title?.english,
-      ...(manga.synonyms ?? []),
-    ].filter((title): title is string => Boolean(title?.trim()));
-    return titles.some((title) => normalizeIdentityText(title) === observedKey);
-  });
+  type AniListManga = {
+    title?: { romaji?: string | null; english?: string | null; native?: string | null };
+    synonyms?: string[];
+  } | null;
   const proposedKey = normalizeIdentityText(proposedSeries);
+  let matches: AniListManga[] = [];
+  for (const search of observedVariants.slice(0, 4)) {
+    const response = await fetch("https://graphql.anilist.co", {
+      method: "POST",
+      headers: { accept: "application/json", "content-type": "application/json" },
+      body: JSON.stringify({ query, variables: { search } }),
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!response.ok) {
+      return { canonicalSeries: null, error: `Catalogo manga non raggiungibile (${response.status}).` };
+    }
+    const payload = (await response.json()) as {
+      data?: {
+        Page?: {
+          media?: AniListManga[];
+        } | null;
+      };
+      errors?: Array<{ message?: string }>;
+    };
+    if (payload.errors?.length) {
+      return { canonicalSeries: null, error: "Catalogo manga non disponibile per questa verifica." };
+    }
+    matches = (payload.data?.Page?.media ?? []).filter((manga) => {
+      if (!manga) return false;
+      const titles = [
+        manga.title?.native,
+        manga.title?.romaji,
+        manga.title?.english,
+        ...(manga.synonyms ?? []),
+      ].filter((title): title is string => Boolean(title?.trim()));
+      return titles.some((title) =>
+        identityTitleVariants(title).some((variant) => observedKeys.includes(normalizeIdentityText(variant)))
+      );
+    });
+    if (matches.length > 0) break;
+  }
   const proposedMatches = matches.filter((manga) =>
     [
       manga?.title?.english,
       manga?.title?.romaji,
       manga?.title?.native,
-    ].some((title) => title && normalizeIdentityText(title) === proposedKey)
+      ...(manga?.synonyms ?? []),
+    ].some((title) =>
+      title && identityTitleVariants(title).some((variant) => normalizeIdentityText(variant) === proposedKey)
+    )
   );
   const manga = proposedMatches.length === 1
     ? proposedMatches[0]
