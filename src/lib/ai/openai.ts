@@ -263,6 +263,9 @@ Quando l'utente usa un comando esplicito come "aggiungi", "inserisci",
 "aggiorna", "modifica", "salva", "rimuovi" o "cancella", quello costituisce già autorizzazione:
 completa le ricerche necessarie e chiama il relativo tool nello stesso turno.
 Non chiedere "vuoi procedere?" e non fermarti a "operazione preparata".
+Usa i metadati che l'utente dichiara esplicitamente nel messaggio (per esempio
+numero del volume o prima stampa) per completare una lettura fotografica
+incompleta; non sovrascrivere un dato visibile che la contraddica.
 
 CONTESTO CONVERSAZIONALE
 - il messaggio può contenere un blocco "ELEMENTO CORRENTE": è l'ultimo manga
@@ -403,6 +406,10 @@ Quando ricevi una o più foto:
   volte con il nome in inglese e in giapponese;
 - se l'utente chiede di aggiungere il pezzo e serie/numero sono identificabili,
   chiama prepare_add_manga;
+- se il titolo è chiaro ma il volume non si legge, cerca di identificare la
+  copertina esatta sul web usando serie e dettagli dell'illustrazione prima di
+  chiedere il numero; una fonte che conferma la copertina e il volume può
+  completare il dato fotografico mancante;
 - se chiede di aggiornare un pezzo, usa prima search_collection e poi
   prepare_update_manga;
 - "mettilo in vendita" / "non è più in vendita": prepare_update_manga con
@@ -1073,8 +1080,10 @@ export async function runCollectionChat({
     `${String(series ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "")}|${volume ?? ""}`;
   if (requiresAdd && photoPieces) {
     for (const piece of photoPieces) {
+      const number = piece.volume_number ?? piece.issue_number;
+      if (number == null) continue;
       evaluated.set(
-        pieceKey(piece.series, piece.volume_number ?? piece.issue_number),
+        pieceKey(piece.series, number),
         `${piece.series}${
           piece.volume_number != null ? ` vol. ${piece.volume_number}` : piece.issue_number ? ` #${piece.issue_number}` : ""
         }`
@@ -1170,7 +1179,9 @@ export async function runCollectionChat({
                 (piece) =>
                   (piece.cover_photo === coverPhoto || piece.photos.includes(coverPhoto)) &&
                   sameObservedTitle(piece.cover_title_text ?? "", observedTitle) &&
-                  piece.volume_number === volume
+                  // Un numero letto dall'utente o dalla fonte può colmare l'OCR mancante,
+                  // ma non contraddire un volume riconosciuto nella foto.
+                  (piece.volume_number === null || piece.volume_number === volume)
               )
             : undefined;
         const matchingContext =
@@ -1614,9 +1625,15 @@ export async function runCollectionChat({
     });
   }
 
+  const unreadableVolume =
+    requiresAdd && actions.length === 0
+      ? photoPieces?.find((piece) => piece.format === "tankobon" && piece.volume_number === null)
+      : undefined;
   return {
     responseId: response.id,
-    text: outputText(response) || "Ho preparato quanto possibile; controlla le proposte prima di confermare.",
+    text: unreadableVolume
+      ? `Ho riconosciuto ${unreadableVolume.series}, ma non sono riuscito a confermare il volume dalla foto o dalle fonti. Non ho aggiunto nulla: scrivimi il numero (per esempio 100) e riprovo.`
+      : outputText(response) || "Non sono riuscito a completare l'operazione. Non ho aggiunto nulla.",
     actions,
     executed,
     intent: { valuation: requiresValuation },
