@@ -172,13 +172,17 @@ Koma deve cercare sul web il titolo trascritto insieme al volume e verificare
 che il nome canonico corrisponda allo stesso logo: una ricerca prezzi non
 lo sostituisce. Un tool verifica che titolo originale e volume siano nella
 query e che la fonte citata appartenga ai risultati di quella ricerca, poi
-usa AniList quando disponibile per normalizzare il titolo, ma un risultato
-mancante non blocca da solo l'aggiunta: se il nome proposto coincide con la
-lettura dedicata della stessa copertina e una fonte web conferma titolo e
-volume, viene usato quel nome. Se la fonte contraddice la copertina o titolo e
-numero restano illeggibili, Koma non aggiunge il pezzo e indica cosa manca,
-senza mostrare un errore generico. Sia la ricerca prezzi sia l'aggiunta usano
-il nome verificato rispetto alla copertina. Il modello della chat
+usa AniList per normalizzare il titolo. La verifica serve a correggere il
+nome, non a dare un permesso: se AniList non trova il titolo, l'aggiunta
+prosegue con il nome letto dalla copertina e l'incertezza finisce nelle note.
+Ricerca prezzi e aggiunta applicano in automatico il nome normalizzato quando
+esiste, anche senza una chiamata esplicita di verifica, e quando il nome
+proposto è già uno dei titoli del catalogo viene mantenuto, perché è quello
+usato dalle fonti di prezzo. Koma non chiede mai all'utente di scegliere fra
+grafie equivalenti né il permesso di procedere: l'unico blocco residuo è il
+logo illeggibile nella foto. Restano obbligatorie, una sola volta per pezzo,
+la ricerca web dei metadati e la ricerca prezzi prima del salvataggio.
+Il modello della chat
 riceve la lettura come fonte primaria e le foto gli arrivano a bassa
 risoluzione solo come riscontro; i pezzi letti diventano l'elenco di quelli
 attesi, e il turno non si chiude finché non sono stati tutti proposti (con

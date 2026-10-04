@@ -299,13 +299,13 @@ Prima di aggiungere:
   Se i risultati sono indicizzati con una traslitterazione o il nome canonico,
   cerca anche quel nome + volume: non serve che la fonte ripeta gli stessi
   caratteri della copertina. Chiama poi verify_series_identity con titolo
-  originale, volume, estratto e fonte. Per i tankobon AniList può confermare
-  o normalizzare il nome; se non restituisce un match, il tool accetta il nome
-  proposto dalla lettura fotografica soltanto quando coincide con la serie
-  letta dalla stessa copertina e la fonte trovata conferma titolo e volume.
-  Non inventare nomi canonici alternativi. Solo dopo chiama
-  lookup_market_price e poi prepare_add_manga. I tool rifiutano prezzo o
-  salvataggio se l'identità non è stata verificata prima;
+  originale, volume, estratto e fonte, infine lookup_market_price e
+  prepare_add_manga. verify_series_identity serve a NORMALIZZARE il nome, non
+  a dare un permesso: se non conferma, prosegui lo stesso con il nome letto
+  dalla copertina e dalle fonti web e scrivi in notes che il titolo canonico
+  non è stato confermato automaticamente. Non interrompere mai il flusso e non
+  chiedere all'utente "vuoi che proceda comunque?" o di scegliere fra grafie
+  equivalenti: completa l'aggiunta e segnala l'incertezza nel riepilogo;
 - per gli zashi verifica il nome della RIVISTA, non il manga in copertina:
   verify_series_identity usa gli alias delle riviste e la fonte web, senza
   richiedere un match AniList. Passa volume_number null; numero del fascicolo
@@ -316,10 +316,10 @@ Prima di aggiungere:
   Usa Weekly Shonen Jump, senza chiedere quale scrittura salvare. Non offrire
   menu di nomi equivalenti; chiedi chiarimenti solo sull'identità della
   rivista, sul numero o sull'anno se realmente incerti;
-- non chiedere all'utente di scegliere il nome canonico prima di aver tentato
-  questa verifica: se la prima ricerca è inconcludente, prova una ricerca
-  mirata con il nome canonico/traslitterato e il volume; chiedi conferma solo
-  se anche le fonti non permettono di identificare il titolo;
+- non chiedere all'utente di scegliere il nome canonico: se le ricerche sono
+  inconcludenti salva il nome del logo così come lo leggi (traslitterato se
+  la copertina è giapponese) e annota il dubbio in notes. L'unica domanda
+  ammessa è quando il logo è illeggibile nella foto;
 - non lasciare questi campi vuoti solo perché non sono scritti nel messaggio:
   cercali online, usando foto, serie, numero ed edizione per disambiguare.
 
@@ -897,9 +897,22 @@ async function resolveCanonicalMangaTitle(
       title && identityTitleVariants(title).some((variant) => normalizeIdentityText(variant) === proposedKey)
     )
   );
-  const manga = proposedMatches.length === 1
-    ? proposedMatches[0]
-    : matches.length === 1 ? matches[0] : undefined;
+  // Se il nome proposto è già uno dei titoli del catalogo, tienilo: è quello
+  // usato dalle fonti di prezzo, mentre il titolo inglese di AniList è spesso
+  // una resa editoriale diversa.
+  if (proposedMatches.length > 0 && proposedSeries.trim()) {
+    const value = { canonicalSeries: proposedSeries.trim() };
+    canonicalTitleCache.set(key, { value, expiresAt: Date.now() + 24 * 60 * 60 * 1000 });
+    return value;
+  }
+  // Più voci omonime (spin-off, edizioni) vanno bene finché concordano sul nome.
+  const candidateNames = new Set(
+    matches
+      .map((manga) => manga?.title?.english?.trim() || manga?.title?.romaji?.trim() || manga?.title?.native?.trim() || "")
+      .filter((name) => name.length > 0)
+      .map(normalizeIdentityText)
+  );
+  const manga = matches.length === 1 || candidateNames.size === 1 ? matches[0] : undefined;
   const canonicalSeries =
     manga?.title?.english?.trim() || manga?.title?.romaji?.trim() || manga?.title?.native?.trim() || null;
   if (!canonicalSeries) return { canonicalSeries: null };
@@ -1056,7 +1069,9 @@ export async function runCollectionChat({
       text:
         "\n\nLETTURA DELLE FOTO (passaggio di visione dedicato: cover_title_text è la trascrizione letterale " +
         "del logo originale e va verificata sul web prima di normalizzare/salvare series; usa anche i campi " +
-        "per volume_number, OBI, sealed, grading, stato e cover_photo; un elemento = un pezzo):\n" +
+        "per volume_number, OBI, sealed, grading, stato e cover_photo; un elemento = un pezzo. " +
+        "Se series o cover_title_text sono vuoti ma il logo è leggibile nella foto, trascrivilo tu e " +
+        "passalo in cover_title_text alle chiamate successive invece di fermarti o chiedere conferma):\n" +
         JSON.stringify(photoPieces),
     });
   }
@@ -1096,6 +1111,7 @@ export async function runCollectionChat({
   const actions: ChatAction[] = [];
   let executed = 0;
   let usedWebSearch = false;
+  let webResearchRejections = 0;
   let usedPriceLookup = false;
   let priceLookupFoundValue = false;
   let identityVerificationProblem: string | null = null;
@@ -1111,6 +1127,7 @@ export async function runCollectionChat({
       volume,
     }));
   const completedPriceLookups = new Set<string>();
+  const priceLookupRejections = new Map<string, number>();
 
   // Con più pezzi da aggiungere, il modello tende a fermarsi al primo (per
   // esempio scartando in silenzio quello senza vendite compatibili). Si
@@ -1456,9 +1473,29 @@ export async function runCollectionChat({
             : "";
           const requestIdentityTitle = photoPiece?.cover_title_text?.trim() ||
             (imageUrls.length > 0 && typeof args.cover_title_text === "string" ? args.cover_title_text.trim() : "") ||
+            photoPiece?.series?.trim() ||
             contextObservedTitle;
           const identityKeyForCall = requestIdentityTitle ? identityKey(requestIdentityTitle, identityVolume) : null;
           const verifiedIdentity = identityKeyForCall ? verifiedBeforeRound.get(identityKeyForCall) : undefined;
+          if (verifiedIdentity && (call.name === "lookup_market_price" || call.name === "prepare_add_manga")) {
+            args.series = verifiedIdentity.canonicalSeries;
+            if (verifiedIdentity.volume !== null) {
+              if (call.name === "lookup_market_price") args.volume = verifiedIdentity.volume;
+              else args.volume_number = verifiedIdentity.volume;
+            }
+          } else if (
+            !verifiedIdentity &&
+            requestIdentityTitle &&
+            (call.name === "lookup_market_price" || call.name === "prepare_add_manga")
+          ) {
+            // Normalizzazione silenziosa: allinea il nome al catalogo quando è
+            // riconoscibile, senza bloccare il flusso se la ricerca non trova nulla.
+            const isMagazine = args.format === "zashi" || photoPiece?.format === "zashi";
+            const normalized = isMagazine
+              ? resolveCanonicalMagazineTitle(requestIdentityTitle).canonicalSeries
+              : (await resolveCanonicalMangaTitle(requestIdentityTitle, String(args.series ?? ""))).canonicalSeries;
+            if (normalized) args.series = normalized;
+          }
           if (call.name === "lookup_market_price" && photoPiece) {
             args.cover_title_text ??= photoPiece.cover_title_text;
             args.cover_photo ??= photoPiece.cover_photo ?? photoPiece.photos[0];
@@ -1488,27 +1525,17 @@ export async function runCollectionChat({
                 JSON.stringify({ verified: false, error: "Identità non verificata." }),
             };
           } else if (
-            call.name === "lookup_market_price" &&
-            (imageUrls.length > 0 || usesRecentContext) &&
-            (!identityKeyForCall ||
-              !verifiedIdentity ||
-              normalizeIdentityText(String(args.series ?? "")) !==
-                normalizeIdentityText(verifiedIdentity.canonicalSeries) ||
-              (verifiedIdentity.volume !== null && args.volume !== verifiedIdentity.volume))
+            call.name === "prepare_add_manga" &&
+            requiresWebResearch &&
+            !usedWebSearch &&
+            webResearchRejections === 0
           ) {
-            result = {
-              output: JSON.stringify({
-                error: "Nome canonico non verificato per questo prezzo",
-                instruction:
-                  "Prima cerca sul web il titolo originale della copertina e il volume, poi chiama verify_series_identity con una fonte dei risultati. Riprova lookup_market_price usando esattamente canonical_series restituito dalla verifica.",
-              }),
-            };
-          } else if (call.name === "prepare_add_manga" && requiresWebResearch && !usedWebSearch) {
+            webResearchRejections += 1;
             result = {
               output: JSON.stringify({
                 error: "Metadati dell'edizione non ancora verificati",
                 instruction:
-                  "Prima di aggiungere, cerca sul web l'edizione usando il titolo originale trascritto dalla copertina (cover_title_text) e il numero del volume. Verifica che la serie canonica corrisponda davvero al logo, non all'OBI o a un testo promozionale. La ricerca prezzi non sostituisce questa verifica. Se non trovi una corrispondenza affidabile o emergono titoli diversi plausibili, chiedi conferma all'utente; altrimenti richiama prepare_add_manga con i metadati verificati.",
+                  "Usa ORA lo strumento web_search con il titolo originale trascritto dalla copertina (cover_title_text) e il numero del volume, per completare anno, editore e ISBN e per controllare che la serie corrisponda al logo e non all'OBI. Non inventare URL di fonti e non chiedere niente all'utente: dopo la ricerca richiama prepare_add_manga, anche se la ricerca non aggiunge metadati.",
               }),
             };
           } else if (
@@ -1526,24 +1553,11 @@ export async function runCollectionChat({
           } else if (
             call.name === "prepare_add_manga" &&
             imageUrls.length > 0 &&
-            (!verifiedIdentity ||
-              normalizeIdentityText(String(args.series ?? "")) !==
-                normalizeIdentityText(verifiedIdentity.canonicalSeries) ||
-              (verifiedIdentity.volume !== null && args.volume_number !== verifiedIdentity.volume))
-          ) {
-            result = {
-              output: JSON.stringify({
-                error: "Titolo canonico della copertina non verificato",
-                instruction:
-                  "Non aggiungere ancora il manga. Cerca il titolo originale del logo insieme al volume, verifica la corrispondenza e chiama verify_series_identity; usa esattamente canonical_series nel salvataggio.",
-              }),
-            };
-          } else if (
-            call.name === "prepare_add_manga" &&
-            imageUrls.length > 0 &&
             identityKeyForCall &&
-            !completedPriceLookups.has(identityKeyForCall)
+            !completedPriceLookups.has(identityKeyForCall) &&
+            (priceLookupRejections.get(identityKeyForCall) ?? 0) === 0
           ) {
+            priceLookupRejections.set(identityKeyForCall, 1);
             result = {
               output: JSON.stringify({
                 error: "Prezzo non ancora cercato per il titolo verificato",
