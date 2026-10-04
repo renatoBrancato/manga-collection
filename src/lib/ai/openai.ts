@@ -120,7 +120,7 @@ const functionTools = [
     type: "function",
     name: "verify_series_identity",
     description:
-      "Verifica il titolo fotografato: per i tankobon usa AniList, per gli zashi gli alias delle riviste e la fonte web, non AniList. La fonte può usare il titolo originale, la traslitterazione o il nome canonico. Per una rivista volume_number deve essere null: cerca separatamente numero del fascicolo e anno. Usa sempre canonical_series restituito. Obbligatorio prima del prezzo e dell'aggiunta.",
+      "Verifica il titolo fotografato: per i tankobon consulta AniList e la fonte web; se AniList non riconosce un titolo leggibile, la fonte web e la lettura della foto possono confermare il canonical_series proposto. Per gli zashi usa gli alias della rivista e la fonte web, non AniList. Per una rivista volume_number deve essere null. Obbligatorio prima del prezzo e dell'aggiunta.",
     parameters: {
       type: "object",
       properties: {
@@ -292,16 +292,18 @@ Prima di aggiungere:
   trascritto in cover_title_text insieme al volume; poi verifica che il nome
   canonico da salvare identifichi proprio quel titolo. Non usare solo il nome
   traslitterato proposto dalla lettura visiva e non confondere titolo, autore
-  e testo dell'OBI. Se le fonti non confermano la corrispondenza, non salvare
-  un nome ipotetico: chiedi all'utente di chiarire il titolo;
+  e testo dell'OBI. AniList è un riferimento utile, non un requisito: se non
+  trova il titolo, puoi procedere quando la lettura della foto e una fonte web
+  sul titolo/volume confermano lo stesso canonical_series;
 - flusso obbligatorio per una foto: cerca sul web il titolo originale + volume.
   Se i risultati sono indicizzati con una traslitterazione o il nome canonico,
   cerca anche quel nome + volume: non serve che la fonte ripeta gli stessi
   caratteri della copertina. Chiama poi verify_series_identity con titolo
-  originale, volume, estratto e fonte; il tool controlla la corrispondenza
-  esatta nel catalogo manga AniList e restituisce il titolo inglese ufficiale
-  o, se assente, quello romaji. Usa esattamente il canonical_series restituito,
-  mai una traduzione libera; solo dopo chiama
+  originale, volume, estratto e fonte. Per i tankobon AniList può confermare
+  o normalizzare il nome; se non restituisce un match, il tool accetta il nome
+  proposto dalla lettura fotografica soltanto quando coincide con la serie
+  letta dalla stessa copertina e la fonte trovata conferma titolo e volume.
+  Non inventare nomi canonici alternativi. Solo dopo chiama
   lookup_market_price e poi prepare_add_manga. I tool rifiutano prezzo o
   salvataggio se l'identità non è stata verificata prima;
 - per gli zashi verifica il nome della RIVISTA, non il manga in copertina:
@@ -317,7 +319,7 @@ Prima di aggiungere:
 - non chiedere all'utente di scegliere il nome canonico prima di aver tentato
   questa verifica: se la prima ricerca è inconcludente, prova una ricerca
   mirata con il nome canonico/traslitterato e il volume; chiedi conferma solo
-  se AniList non conferma l'identità o non trovi una fonte utile;
+  se anche le fonti non permettono di identificare il titolo;
 - non lasciare questi campi vuoti solo perché non sono scritti nel messaggio:
   cercali online, usando foto, serie, numero ed edizione per disambiguare.
 
@@ -810,7 +812,11 @@ function sameObservedTitle(left: string, right: string): boolean {
   if (normalizeIdentityText(left) === normalizeIdentityText(right)) return true;
   const leftMagazine = resolveCanonicalMagazineTitle(left).canonicalSeries;
   const rightMagazine = resolveCanonicalMagazineTitle(right).canonicalSeries;
-  return leftMagazine !== null && leftMagazine === rightMagazine;
+  if (leftMagazine !== null || rightMagazine !== null) {
+    return leftMagazine !== null && leftMagazine === rightMagazine;
+  }
+  const rightVariants = new Set(identityTitleVariants(right).map(normalizeIdentityText));
+  return identityTitleVariants(left).some((variant) => rightVariants.has(normalizeIdentityText(variant)));
 }
 
 async function resolveCanonicalMangaTitle(
@@ -839,12 +845,20 @@ async function resolveCanonicalMangaTitle(
   const proposedKey = normalizeIdentityText(proposedSeries);
   let matches: AniListManga[] = [];
   for (const search of observedVariants.slice(0, 4)) {
-    const response = await fetch("https://graphql.anilist.co", {
-      method: "POST",
-      headers: { accept: "application/json", "content-type": "application/json" },
-      body: JSON.stringify({ query, variables: { search } }),
-      signal: AbortSignal.timeout(8_000),
-    });
+    let response: Response;
+    try {
+      response = await fetch("https://graphql.anilist.co", {
+        method: "POST",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        body: JSON.stringify({ query, variables: { search } }),
+        signal: AbortSignal.timeout(8_000),
+      });
+    } catch (cause) {
+      return {
+        canonicalSeries: null,
+        error: `Catalogo AniList non raggiungibile: ${cause instanceof Error ? cause.message : "errore di rete"}.`,
+      };
+    }
     if (!response.ok) {
       return { canonicalSeries: null, error: `Catalogo manga non raggiungibile (${response.status}).` };
     }
@@ -1084,6 +1098,7 @@ export async function runCollectionChat({
   let usedWebSearch = false;
   let usedPriceLookup = false;
   let priceLookupFoundValue = false;
+  let identityVerificationProblem: string | null = null;
   const webSearchEvidence: WebSearchEvidence[] = [];
   const verifiedIdentities = new Map<
     string,
@@ -1232,14 +1247,22 @@ export async function runCollectionChat({
           const resolution = isMagazine
             ? magazineResolution
             : await resolveCanonicalMangaTitle(observedTitle, proposedSeries);
-          if (resolution.error) {
+          const photoSeriesFallback =
+            matchingPhoto &&
+            proposedSeries.length > 0 &&
+            matchingPhoto.series.trim().length > 0 &&
+            sameSeriesIdentity(proposedSeries, matchingPhoto.series)
+              ? matchingPhoto.series
+              : null;
+          const canonicalSeries = resolution.canonicalSeries ?? (isMagazine ? null : photoSeriesFallback);
+          if (resolution.error && !canonicalSeries) {
             problem = resolution.error;
-          } else if (!resolution.canonicalSeries) {
+          } else if (!canonicalSeries) {
             problem = isMagazine
               ? "Il titolo della rivista non corrisponde a un alias noto. Serve una conferma del nome della rivista."
-              : "Il titolo originale non ha una corrispondenza esatta nel catalogo manga. Non inventare il nome canonico.";
+              : "AniList non ha trovato il titolo e il nome proposto non coincide con la lettura della copertina.";
           } else {
-            const normalizedCanonicalSeries = normalizeIdentityText(resolution.canonicalSeries);
+            const normalizedCanonicalSeries = normalizeIdentityText(canonicalSeries);
             const matchingSource = webSearchEvidence.find(
               ({ query, sources }) =>
                 observedTitle.length > 0 &&
@@ -1260,7 +1283,7 @@ export async function runCollectionChat({
             } else {
               verifiedIdentities.set(identityKey(observedTitle, volume), {
                 observedTitle,
-                canonicalSeries: resolution.canonicalSeries,
+                canonicalSeries,
                 volume,
               });
             }
@@ -1286,7 +1309,9 @@ export async function runCollectionChat({
                 }
           )
         );
+        if (problem) identityVerificationProblem = problem;
       } catch {
+        identityVerificationProblem = "Il controllo automatico del titolo non è riuscito.";
         identityVerificationResults.set(
           call.call_id,
           JSON.stringify({
@@ -1656,11 +1681,23 @@ export async function runCollectionChat({
     requiresAdd && actions.length === 0
       ? photoPieces?.find((piece) => piece.format === "tankobon" && piece.volume_number === null)
       : undefined;
+  const fallbackText =
+    outputText(response) || "Non sono riuscito a completare l'operazione. Non ho aggiunto nulla.";
+  const genericFailure =
+    /^(?:ho preparato quanto possibile; controlla le proposte prima di confermare\.|non sono riuscito a completare l'operazione\. non ho aggiunto nulla\.)$/i.test(
+      fallbackText
+    );
   return {
     responseId: response.id,
     text: unreadableVolume
       ? `Ho riconosciuto ${unreadableVolume.series}, ma non sono riuscito a confermare il volume dalla foto o dalle fonti. Non ho aggiunto nulla: scrivimi il numero (per esempio 100) e riprovo.`
-      : outputText(response) || "Non sono riuscito a completare l'operazione. Non ho aggiunto nulla.",
+      : genericFailure && requiresAdd
+        ? `Non ho aggiunto nulla: ${identityVerificationProblem ?? "la verifica automatica del titolo e del volume non è arrivata a una conclusione"}.${
+            photoPieces?.[0]?.series
+              ? ` Ho letto "${photoPieces[0].series}"${photoPieces[0].volume_number ? `, volume ${photoPieces[0].volume_number}` : ""}.`
+              : ""
+          } Non serve scegliere una grafia canonica: se il titolo o il numero non sono leggibili, invia una foto più chiara o scrivili nel messaggio.`
+        : fallbackText,
     actions,
     executed,
     intent: { valuation: requiresValuation },
