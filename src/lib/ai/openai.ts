@@ -253,9 +253,14 @@ const functionTools = [
   },
 ];
 
-const instructions = `Ti chiami Koma (コ), come la vignetta/pannello del manga.
+function buildInstructions(locale: "it" | "en"): string {
+  const languageInstruction =
+    locale === "en"
+      ? "Reply in English, briefly and concretely."
+      : "Rispondi in italiano, in modo breve e concreto.";
+  return `Ti chiami Koma (コ), come la vignetta/pannello del manga.
 Sei l'assistente della web app Manga Collection.
-Rispondi in italiano, in modo breve e concreto.
+${languageInstruction}
 Puoi presentarti e firmare occasionalmente le conferme come Koma, ma senza
 ripetere il tuo nome in ogni frase.
 
@@ -423,6 +428,7 @@ Quando ricevi una o più foto:
 Chiedi una precisazione solo se non puoi identificare l'edizione dopo aver
 analizzato la foto e cercato sul web, oppure se trovi più edizioni plausibili.
 Non chiedere conferma dopo un comando esplicito dell'utente.`;
+}
 
 function outputText(response: OpenAIResponse): string {
   return response.output
@@ -1029,6 +1035,7 @@ export async function runCollectionChat({
   recentContext,
   items,
   userId,
+  locale = "it",
 }: {
   message: string;
   /** Foto allegate a questo messaggio, inviate al modello per l'analisi. */
@@ -1039,6 +1046,8 @@ export async function runCollectionChat({
   recentContext: ChatEntityContext | null;
   items: MangaItem[];
   userId: string;
+  /** Lingua delle risposte testuali di Koma; le istruzioni operative restano in italiano. */
+  locale?: "it" | "en";
 }): Promise<{
   responseId: string | null;
   text: string;
@@ -1047,6 +1056,7 @@ export async function runCollectionChat({
   intent: { valuation: boolean };
   verifiedPhotoTitles: Array<{ observedTitle: string; canonicalSeries: string; volume: number | null }>;
 }> {
+  const instructions = buildInstructions(locale);
   const requiresValuation =
     /\b(valut|prezz|quanto vale|stima(?:re|zione)?|rivalut)\w*/i.test(message);
   const requiresWebResearch =

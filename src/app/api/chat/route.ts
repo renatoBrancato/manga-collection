@@ -4,6 +4,7 @@ import { listItems } from "@/lib/items";
 import { MAX_CHAT_IMAGES, runCollectionChat } from "@/lib/ai/openai";
 import { executeChatAction } from "@/lib/ai/actions";
 import { chatEntityContextSchema } from "@/lib/ai/schemas";
+import { getLocale } from "@/lib/i18n/server";
 
 // Più foto e più pezzi richiedono diversi giri con il modello.
 export const maxDuration = 300;
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
   try {
     const body = requestSchema.parse(await request.json());
     const items = await listItems(user.id);
+    const locale = await getLocale();
     const imageUrls = body.imageUrls ?? (body.imageUrl ? [body.imageUrl] : []);
     const contextImageUrls = body.contextImageUrls ?? (body.contextImageUrl ? [body.contextImageUrl] : []);
     const result = await runCollectionChat({
@@ -48,6 +50,7 @@ export async function POST(request: Request) {
       recentContext: body.recentContext ?? null,
       items,
       userId: user.id,
+      locale,
     });
 
     if (result.actions.length === 0) {
