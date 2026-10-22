@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import type { MangaItem } from "@/lib/types";
 import CoverImage from "@/components/CoverImage";
 import { formatMoney } from "@/lib/money";
+import { buildMangaPrimaStampaUrl } from "@/lib/mangaprimastampa";
 
 const VALUATION_LABELS: Record<string, string> = {
   westblue: "West Blue",
@@ -41,6 +42,7 @@ export default function ItemDetailsModal({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const title = item.series ?? item.title;
   const number = item.format === "zashi" ? item.issue_number : item.volume_number;
+  const mangaPrimaStampaUrl = buildMangaPrimaStampaUrl(item);
   const details: Array<[string, string | number | null]> = [
     ["Formato", item.format === "zashi" ? "Zashi (rivista)" : "Tankobon (volume)"],
     [item.format === "zashi" ? "Numero / uscita" : "Volume", number],
@@ -114,6 +116,16 @@ export default function ItemDetailsModal({
         </section>
       )}
       <footer className="mt-5 flex flex-wrap justify-end gap-2 border-t border-slate-800 pt-4">
+        {mangaPrimaStampaUrl && (
+          <a
+            href={mangaPrimaStampaUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800"
+          >
+            Vedi su mangaprimastampa.it
+          </a>
+        )}
         <button type="button" onClick={onHistory} className="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800">Andamento del valore</button>
         {onEdit && (
           <button type="button" onClick={onEdit} className="rounded-lg bg-indigo-500 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-400">Modifica</button>
