@@ -5,9 +5,12 @@ import { useRouter } from "next/navigation";
 import type { MangaItem } from "@/lib/types";
 import CoverImage from "@/components/CoverImage";
 import { prepareCoverForUpload } from "@/lib/image-client";
+import { useTranslations } from "@/lib/i18n/LocaleProvider";
 
 export default function EditItemModal({ item, onClose }: { item: MangaItem; onClose: () => void }) {
   const router = useRouter();
+  const { t: dict } = useTranslations();
+  const t = dict.editItemModal;
   const [format, setFormat] = useState(item.format);
   const [graded, setGraded] = useState(!!item.grading_authority);
   const [imageUrl, setImageUrl] = useState(item.image_url ?? "");
@@ -67,12 +70,12 @@ export default function EditItemModal({ item, onClose }: { item: MangaItem; onCl
       const body = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        throw new Error(body.error || "Errore durante il salvataggio");
+        throw new Error(body.error || t.saveError);
       }
       onClose();
       router.refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Errore durante il salvataggio");
+      setError(cause instanceof Error ? cause.message : t.saveError);
     } finally {
       setSaving(false);
     }
@@ -82,7 +85,7 @@ export default function EditItemModal({ item, onClose }: { item: MangaItem; onCl
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl border border-slate-800 bg-slate-900 p-5">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Modifica elemento</h2>
+          <h2 className="text-lg font-semibold">{t.title}</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-200">
             ✕
           </button>
@@ -94,7 +97,7 @@ export default function EditItemModal({ item, onClose }: { item: MangaItem; onCl
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={URL.createObjectURL(imageFile)}
-                alt="Anteprima"
+                alt={t.imagePreviewAlt}
                 className="h-28 w-20 rounded-lg object-cover"
               />
             ) : (
@@ -108,7 +111,7 @@ export default function EditItemModal({ item, onClose }: { item: MangaItem; onCl
                   setImageUrl(e.target.value);
                   setImageFile(null);
                 }}
-                placeholder="Link diretto a un'immagine (https://...jpg/.png)"
+                placeholder={t.imageUrlPlaceholder}
                 className="input w-full"
               />
               <input
@@ -118,20 +121,20 @@ export default function EditItemModal({ item, onClose }: { item: MangaItem; onCl
                 className="block w-full text-xs text-slate-400 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-500 file:px-3 file:py-1.5 file:text-white hover:file:bg-indigo-400"
               />
               <p className="text-[11px] text-slate-500">
-                L'immagine viene ridotta automaticamente a massimo 1600 px e circa 1,5 MB.
+                {t.imageHelp}
               </p>
             </div>
           </div>
 
           <select value={format} onChange={(e) => setFormat(e.target.value as "tankobon" | "zashi")} className="input">
-            <option value="tankobon">Tankobon (volume)</option>
-            <option value="zashi">Zashi (rivista, es. Shonen Jump)</option>
+            <option value="tankobon">{t.tankobonFormat}</option>
+            <option value="zashi">{t.zashiFormat}</option>
           </select>
           <input
             name="series"
             required
             defaultValue={item.series ?? item.title}
-            placeholder="Serie/Titolo *"
+            placeholder={t.seriesPlaceholder}
             className="input"
           />
 
@@ -141,14 +144,14 @@ export default function EditItemModal({ item, onClose }: { item: MangaItem; onCl
               type="number"
               step="0.1"
               defaultValue={item.volume_number ?? ""}
-              placeholder="Numero volume"
+              placeholder={t.volumeNumberPlaceholder}
               className="input"
             />
           ) : (
             <input
               name="issue_number"
               defaultValue={item.issue_number ?? ""}
-              placeholder="Numero/uscita"
+              placeholder={t.issueNumberPlaceholder}
               className="input"
             />
           )}
@@ -159,35 +162,35 @@ export default function EditItemModal({ item, onClose }: { item: MangaItem; onCl
             max="2100"
             step="1"
             defaultValue={item.release_year ?? ""}
-            placeholder="Anno di uscita"
+            placeholder={t.releaseYearPlaceholder}
             className="input"
           />
-          <input name="publisher" defaultValue={item.publisher ?? ""} placeholder="Editore" className="input" />
-          <input name="isbn" defaultValue={item.isbn ?? ""} placeholder="ISBN" className="input" />
-          <input name="language" defaultValue={item.language ?? ""} placeholder="Lingua" className="input" />
+          <input name="publisher" defaultValue={item.publisher ?? ""} placeholder={t.publisherPlaceholder} className="input" />
+          <input name="isbn" defaultValue={item.isbn ?? ""} placeholder={t.isbnPlaceholder} className="input" />
+          <input name="language" defaultValue={item.language ?? ""} placeholder={t.languagePlaceholder} className="input" />
 
           <select name="is_first_print" defaultValue={item.is_first_print == null ? "" : String(item.is_first_print)} className="input">
-            <option value="">Prima stampa? (non specificato)</option>
-            <option value="true">Sì, prima stampa (初版)</option>
-            <option value="false">No, ristampa</option>
+            <option value="">{t.firstPrintUnspecified}</option>
+            <option value="true">{t.firstPrintYes}</option>
+            <option value="false">{t.firstPrintNo}</option>
           </select>
           <select name="has_obi" defaultValue={item.has_obi == null ? "" : String(item.has_obi)} className="input">
-            <option value="">Fascetta OBI? (non specificato)</option>
-            <option value="true">Sì, presente</option>
-            <option value="false">No, assente</option>
+            <option value="">{t.obiUnspecified}</option>
+            <option value="true">{t.obiYes}</option>
+            <option value="false">{t.obiNo}</option>
           </select>
           <select name="is_sealed" defaultValue={String(item.is_sealed ?? false)} className="input">
-            <option value="false">Non sigillato</option>
-            <option value="true">Sigillato (cellophane originale)</option>
+            <option value="false">{t.sealedNo}</option>
+            <option value="true">{t.sealedYes}</option>
           </select>
           <select name="is_for_sale" defaultValue={String(item.is_for_sale ?? false)} className="input">
-            <option value="false">Non in vendita</option>
-            <option value="true">In vendita</option>
+            <option value="false">{t.forSaleNo}</option>
+            <option value="true">{t.forSaleYes}</option>
           </select>
           <input
             name="printing_notes"
             defaultValue={item.printing_notes ?? ""}
-            placeholder="Note stampa (es. 3a ristampa)"
+            placeholder={t.printingNotesPlaceholder}
             className="input"
           />
 
@@ -198,7 +201,7 @@ export default function EditItemModal({ item, onClose }: { item: MangaItem; onCl
               onChange={(e) => setGraded(e.target.checked)}
               className="h-4 w-4 rounded border-slate-700 bg-slate-950"
             />
-            Gradato da un ente (CGC/CBCS/BGS)
+            {t.gradedLabel}
           </label>
 
           {graded ? (
@@ -207,14 +210,14 @@ export default function EditItemModal({ item, onClose }: { item: MangaItem; onCl
                 <option value="CGC">CGC</option>
                 <option value="CBCS">CBCS</option>
                 <option value="BGS">BGS</option>
-                <option value="altro">Altro</option>
+                <option value="altro">{t.gradingAuthorityOther}</option>
               </select>
               <input
                 name="grading_value"
                 type="number"
                 step="0.1"
                 defaultValue={item.grading_value ?? ""}
-                placeholder="Voto (es. 9.8)"
+                placeholder={t.gradingValuePlaceholder}
                 className="input"
               />
             </>
@@ -222,7 +225,7 @@ export default function EditItemModal({ item, onClose }: { item: MangaItem; onCl
             <input
               name="condition_estimate"
               defaultValue={item.condition_estimate ?? ""}
-              placeholder="Stima condizione (es. buono)"
+              placeholder={t.conditionEstimatePlaceholder}
               className="input"
             />
           )}
@@ -232,11 +235,11 @@ export default function EditItemModal({ item, onClose }: { item: MangaItem; onCl
             type="number"
             step="0.01"
             defaultValue={item.estimated_value ?? ""}
-            placeholder="Valore stimato"
+            placeholder={t.estimatedValuePlaceholder}
             className="input"
           />
-          <input name="currency" defaultValue={item.currency || "EUR"} placeholder="Valuta (es. EUR)" className="input" />
-          <input name="notes" defaultValue={item.notes ?? ""} placeholder="Note" className="input" />
+          <input name="currency" defaultValue={item.currency || "EUR"} placeholder={t.currencyPlaceholder} className="input" />
+          <input name="notes" defaultValue={item.notes ?? ""} placeholder={t.notesPlaceholder} className="input" />
 
           <div className="col-span-full flex items-center gap-2">
             <button
@@ -244,14 +247,14 @@ export default function EditItemModal({ item, onClose }: { item: MangaItem; onCl
               disabled={saving}
               className="rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-400 disabled:opacity-50"
             >
-              {saving ? "Salvataggio..." : "Salva modifiche"}
+              {saving ? t.saving : t.saveChanges}
             </button>
             <button
               type="button"
               onClick={onClose}
               className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
             >
-              Annulla
+              {t.cancel}
             </button>
             {error && <span className="text-sm text-red-400">{error}</span>}
           </div>

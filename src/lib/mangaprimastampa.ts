@@ -1,4 +1,5 @@
 import type { MangaItem } from "@/lib/types";
+import type { Locale } from "@/lib/i18n/locale";
 
 /**
  * Eccezioni allo slugify automatico: il nostro titolo serie non coincide con lo slug
@@ -25,8 +26,12 @@ function slugify(value: string): string {
 /**
  * Restituisce l'URL della scheda del volume su mangaprimastampa.it, se disponibile.
  * Il portale ha al momento solo le schede del primo volume di ogni serie tankobon.
+ * In inglese punta alla versione /en/ della stessa scheda.
  */
-export function buildMangaPrimaStampaUrl(item: Pick<MangaItem, "series" | "title" | "format" | "volume_number">): string | null {
+export function buildMangaPrimaStampaUrl(
+  item: Pick<MangaItem, "series" | "title" | "format" | "volume_number">,
+  locale: Locale = "it"
+): string | null {
   if (item.format !== "tankobon" || item.volume_number !== 1) return null;
 
   const name = item.series ?? item.title;
@@ -36,6 +41,7 @@ export function buildMangaPrimaStampaUrl(item: Pick<MangaItem, "series" | "title
   if (!rawSlug) return null;
 
   const slug = SLUG_OVERRIDES[rawSlug] ?? rawSlug;
+  const prefix = locale === "en" ? "en/" : "";
 
-  return `https://mangaprimastampa.it/archivio/${slug}-volume-1/`;
+  return `https://mangaprimastampa.it/${prefix}archivio/${slug}-volume-1/`;
 }

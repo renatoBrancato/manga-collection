@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "@/lib/i18n/LocaleProvider";
 
 const RETRY_KEY = "dashboard-load-retries";
 const MAX_AUTO_RETRIES = 2;
@@ -13,6 +14,7 @@ const MAX_AUTO_RETRIES = 2;
  */
 export default function DashboardRecovery({ failed, suspicious }: { failed: boolean; suspicious: boolean }) {
   const router = useRouter();
+  const { t } = useTranslations();
   const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
@@ -34,7 +36,7 @@ export default function DashboardRecovery({ failed, suspicious }: { failed: bool
       role="alert"
       className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-5 py-4 text-sm text-amber-100"
     >
-      <span>⚠️ Non sono riuscito a caricare la collezione (connessione o sessione). Riprovo in automatico; se resta così, premi Riprova.</span>
+      <span>{t.dashboardRecovery.message}</span>
       <button
         type="button"
         disabled={retrying}
@@ -45,7 +47,7 @@ export default function DashboardRecovery({ failed, suspicious }: { failed: bool
         }}
         className="rounded-lg border border-amber-300/40 px-3 py-1.5 font-medium transition hover:bg-amber-400/20 disabled:opacity-60"
       >
-        Riprova
+        {t.dashboardRecovery.retry}
       </button>
     </div>
   );

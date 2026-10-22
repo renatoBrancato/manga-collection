@@ -2,6 +2,8 @@
 
 import { useId, useMemo, useRef, useState } from "react";
 import { formatMoney } from "@/lib/money";
+import type { Locale } from "@/lib/i18n/locale";
+import { useTranslations } from "@/lib/i18n/LocaleProvider";
 
 export type ValuePoint = { day: string; value: number | null };
 
@@ -13,8 +15,8 @@ export function formatEuro(value: number): string {
   return formatMoney(value);
 }
 
-export function formatDay(day: string): string {
-  return new Date(`${day}T00:00:00`).toLocaleDateString("it-IT", {
+export function formatDay(day: string, locale: Locale = "it"): string {
+  return new Date(`${day}T00:00:00`).toLocaleDateString(locale === "it" ? "it-IT" : "en-US", {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -28,6 +30,7 @@ export function formatDay(day: string): string {
  * interrompono la linea.
  */
 export default function ValueChart({ points, height = 150 }: { points: ValuePoint[]; height?: number }) {
+  const { locale, t } = useTranslations();
   const gradientId = `value-gradient-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const svgRef = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<number | null>(null);
@@ -170,9 +173,9 @@ export default function ValueChart({ points, height = 150 }: { points: ValuePoin
           }}
         >
           <div className="font-semibold text-white">
-            {active.point.value != null ? formatEuro(active.point.value) : "Rimosso"}
+            {active.point.value != null ? formatEuro(active.point.value) : t.valueChart.removed}
           </div>
-          <div className="text-slate-400">{formatDay(active.point.day)}</div>
+          <div className="text-slate-400">{formatDay(active.point.day, locale)}</div>
         </div>
       )}
     </div>

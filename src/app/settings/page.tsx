@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { siteUrl } from "@/lib/site-url";
 import RegenerateKeyButton from "@/components/RegenerateKeyButton";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { getTranslations } from "@/lib/i18n/server";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -17,24 +19,27 @@ export default async function SettingsPage() {
     .eq("id", user.id)
     .single();
 
+  const { t } = await getTranslations();
   const mcpBaseUrl = siteUrl();
   const apiKey = profile?.api_key ?? "";
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-slate-50 sm:px-8">
       <div className="mx-auto max-w-2xl space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">🔌 Connessione MCP</h1>
-          <Link href="/dashboard" className="text-sm text-slate-300 hover:underline">
-            ← Torna alla collezione
-          </Link>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-bold">{t.settings.heading}</h1>
+          <div className="flex items-center gap-3">
+            <LanguageSwitcher />
+            <Link href="/dashboard" className="text-sm text-slate-300 hover:underline">
+              {t.settings.backToCollection}
+            </Link>
+          </div>
         </div>
 
         <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-          <h2 className="font-semibold">La tua API key personale</h2>
+          <h2 className="font-semibold">{t.settings.apiKeyTitle}</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Usala nella configurazione dell&apos;Action del tuo Custom GPT così i volumi scansionati
-            vengono salvati nel tuo account.
+            {t.settings.apiKeyDescription}
           </p>
           <div className="mt-3 flex items-center gap-2">
             <code className="flex-1 rounded-lg bg-slate-950 px-3 py-2 text-xs text-emerald-400">
@@ -45,21 +50,32 @@ export default async function SettingsPage() {
         </section>
 
         <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-          <h2 className="font-semibold">Come collegare ChatGPT (connettore MCP)</h2>
+          <h2 className="font-semibold">{t.settings.howToConnectTitle}</h2>
           <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm text-slate-300">
-            <li>Su chatgpt.com apri <strong>Impostazioni → App e connettori</strong> (potrebbe servire attivare prima la &quot;Developer mode&quot; nelle impostazioni avanzate).</li>
-            <li>Clicca <strong>Crea/Aggiungi connettore</strong> e inserisci come URL:{" "}
+            <li>
+              {t.settings.step1Before}
+              <strong>{t.settings.step1Strong}</strong>
+              {t.settings.step1After}
+            </li>
+            <li>
+              {t.settings.step2Before}
+              <strong>{t.settings.step2Strong}</strong>
+              {t.settings.step2After}{" "}
               <code className="text-emerald-400">{mcpBaseUrl}/api/mcp</code>
             </li>
             <li>
-              Come autenticazione scegli <strong>API Key / Bearer token</strong> e incolla la tua API key
-              qui sopra. Ogni utente configura la propria: i dati restano separati per account.
+              {t.settings.step3Before}
+              <strong>{t.settings.step3Strong}</strong>
             </li>
-            <li>Salva. ChatGPT rileverà automaticamente gli strumenti <code className="text-emerald-400">add_manga_item</code> e <code className="text-emerald-400">list_manga_items</code>.</li>
             <li>
-              In chat, allega la foto del volume (copertina, dorso ed eventualmente il colophon per la
-              prima stampa) e chiedi a ChatGPT di identificarlo, stimarne il valore cercando sul web, e
-              salvarlo nella collezione: userà automaticamente il connettore.
+              {t.settings.step4Before}
+              <code className="text-emerald-400">add_manga_item</code>
+              {t.settings.step4Middle}
+              <code className="text-emerald-400">list_manga_items</code>
+              {t.settings.step4After}
+            </li>
+            <li>
+              {t.settings.step5}
             </li>
           </ol>
         </section>

@@ -13,6 +13,7 @@ import ItemHistoryModal from "@/components/ItemHistoryModal";
 import DeleteItemDialog from "@/components/DeleteItemDialog";
 import StockList, { ChangeBadge } from "@/components/StockList";
 import { type ItemTrends, type TrendPeriod, TREND_PERIODS, itemChange } from "@/lib/trends";
+import { useTranslations } from "@/lib/i18n/LocaleProvider";
 
 const FORMAT_LABELS: Record<string, string> = {
   tankobon: "Tankobon",
@@ -44,6 +45,7 @@ export default function ItemsTable({
 }) {
   const supabase = createClient();
   const router = useRouter();
+  const { t } = useTranslations();
   const [formatFilter, setFormatFilter] = useState<string>("all");
   const [gradingFilter, setGradingFilter] = useState("all");
   const [obiFilter, setObiFilter] = useState("all");
@@ -217,7 +219,7 @@ export default function ItemsTable({
       p_forget_history: forgetHistory,
     });
     if (error) throw new Error(error.message);
-    if (!data) throw new Error("Elemento non trovato");
+    if (!data) throw new Error(t.itemsTable.itemNotFound);
     setDeletingItem(null);
     router.refresh();
   }
@@ -227,23 +229,23 @@ export default function ItemsTable({
       <div className="rounded-2xl border border-white/10 bg-slate-900/65 p-4 shadow-lg shadow-black/10 backdrop-blur">
         <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-300">Archivio</p>
-            <h2 className="mt-1 text-lg font-bold text-white">Esplora la collezione</h2>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-300">{t.itemsTable.eyebrow}</p>
+            <h2 className="mt-1 text-lg font-bold text-white">{t.itemsTable.title}</h2>
           </div>
           <div className="flex items-center gap-3 text-sm">
             {hasActiveFilters && (
               <button onClick={resetFilters} className="font-medium text-indigo-300 transition hover:text-indigo-200">
-                Azzera filtri
+                {t.itemsTable.clearFilters}
               </button>
             )}
             <span className="rounded-full bg-white/5 px-3 py-1 text-slate-400">
-              {filtered.length} di {items.length}
+              {t.itemsTable.countOf(filtered.length, items.length)}
             </span>
-            <div role="group" aria-label="Vista" className="flex rounded-lg border border-slate-700 bg-slate-950 p-0.5">
+            <div role="group" aria-label={t.itemsTable.viewGroupLabel} className="flex rounded-lg border border-slate-700 bg-slate-950 p-0.5">
               {(
                 [
-                  ["grid", "Copertine", "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"],
-                  ["list", "Borsa", "M3 17l6-6 4 4 8-8M15 7h6v6"],
+                  ["grid", t.itemsTable.gridView, "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"],
+                  ["list", t.itemsTable.listView, "M3 17l6-6 4 4 8-8M15 7h6v6"],
                 ] as const
               ).map(([key, label, icon]) => (
                 <button
@@ -251,7 +253,7 @@ export default function ItemsTable({
                   type="button"
                   onClick={() => updateView({ view: key })}
                   aria-pressed={view === key}
-                  title={key === "grid" ? "Vista a copertine" : "Vista borsa: valore e variazioni"}
+                  title={key === "grid" ? t.itemsTable.gridViewTitle : t.itemsTable.listViewTitle}
                   className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition ${
                     view === key ? "bg-indigo-500 text-white" : "text-slate-400 hover:text-white"
                   }`}
@@ -268,7 +270,7 @@ export default function ItemsTable({
 
         <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
           <label className="relative min-w-0 flex-1">
-            <span className="sr-only">Cerca nella collezione</span>
+            <span className="sr-only">{t.itemsTable.searchSrLabel}</span>
             <svg
               viewBox="0 0 24 24"
               fill="none"
@@ -284,7 +286,7 @@ export default function ItemsTable({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => e.key === "Escape" && setSearch("")}
-              placeholder="Serie, editore, ISBN..."
+              placeholder={t.itemsTable.searchPlaceholder}
               className="input w-full pl-9 pr-9"
             />
             {search && (
@@ -296,8 +298,8 @@ export default function ItemsTable({
                   (e.currentTarget.previousElementSibling as HTMLInputElement | null)?.focus();
                 }}
                 className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-white/10 hover:text-white"
-                aria-label="Cancella ricerca"
-                title="Cancella ricerca"
+                aria-label={t.itemsTable.clearSearch}
+                title={t.itemsTable.clearSearch}
               >
                 ✕
               </button>
@@ -324,7 +326,7 @@ export default function ItemsTable({
             >
               <path d="M3 5h18M6 12h12M10 19h4" />
             </svg>
-            Filtri
+            {t.itemsTable.filters}
             {activeFilterCount > 0 && (
               <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-indigo-500 px-1.5 text-[11px] font-semibold text-white">
                 {activeFilterCount}
@@ -343,16 +345,16 @@ export default function ItemsTable({
           </button>
 
           <label className="flex shrink-0 items-center gap-2 text-sm text-slate-400">
-            <span>Ordina per</span>
+            <span>{t.itemsTable.sortBy}</span>
             <select value={sort} onChange={(e) => setSort(e.target.value)} className="input min-w-40">
-              <option value="newest">Più recenti</option>
-              <option value="title">Titolo A-Z</option>
-              <option value="year_desc">Anno: più nuovi</option>
-              <option value="year_asc">Anno: più vecchi</option>
-              <option value="value_desc">Valore: decrescente</option>
-              <option value="value_asc">Valore: crescente</option>
-              <option value="change_desc">Variazione: rialzi</option>
-              <option value="change_asc">Variazione: ribassi</option>
+              <option value="newest">{t.itemsTable.sortNewest}</option>
+              <option value="title">{t.itemsTable.sortTitle}</option>
+              <option value="year_desc">{t.itemsTable.sortYearDesc}</option>
+              <option value="year_asc">{t.itemsTable.sortYearAsc}</option>
+              <option value="value_desc">{t.itemsTable.sortValueDesc}</option>
+              <option value="value_asc">{t.itemsTable.sortValueAsc}</option>
+              <option value="change_desc">{t.itemsTable.sortChangeDesc}</option>
+              <option value="change_asc">{t.itemsTable.sortChangeAsc}</option>
             </select>
           </label>
         </div>
@@ -360,48 +362,48 @@ export default function ItemsTable({
         {filtersOpen && (
           <div className="mt-2.5 grid gap-2.5 border-t border-white/8 pt-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             <select value={formatFilter} onChange={(e) => setFormatFilter(e.target.value)} className="input w-full">
-              <option value="all">Ogni formato</option>
-              <option value="tankobon">Tankobon</option>
-              <option value="zashi">Zashi</option>
+              <option value="all">{t.itemsTable.formatAll}</option>
+              <option value="tankobon">{t.itemsTable.formatTankobon}</option>
+              <option value="zashi">{t.itemsTable.formatZashi}</option>
             </select>
             <select value={gradingFilter} onChange={(e) => setGradingFilter(e.target.value)} className="input w-full">
-              <option value="all">Raw e gradati</option>
-              <option value="raw">Solo raw</option>
-              <option value="graded">Solo gradati</option>
+              <option value="all">{t.itemsTable.gradingAll}</option>
+              <option value="raw">{t.itemsTable.gradingRaw}</option>
+              <option value="graded">{t.itemsTable.gradingGraded}</option>
             </select>
             <select value={obiFilter} onChange={(e) => setObiFilter(e.target.value)} className="input w-full">
-              <option value="all">OBI: tutti</option>
-              <option value="yes">Con OBI</option>
-              <option value="no">Senza OBI</option>
+              <option value="all">{t.itemsTable.obiAll}</option>
+              <option value="yes">{t.itemsTable.obiYes}</option>
+              <option value="no">{t.itemsTable.obiNo}</option>
             </select>
             <select value={sealedFilter} onChange={(e) => setSealedFilter(e.target.value)} className="input w-full">
-              <option value="all">Sigillati e aperti</option>
-              <option value="yes">Solo sigillati</option>
-              <option value="no">Solo non sigillati</option>
+              <option value="all">{t.itemsTable.sealedAll}</option>
+              <option value="yes">{t.itemsTable.sealedYes}</option>
+              <option value="no">{t.itemsTable.sealedNo}</option>
             </select>
             <select value={saleFilter} onChange={(e) => setSaleFilter(e.target.value)} className="input w-full">
-              <option value="all">Vendita: tutti</option>
-              <option value="yes">Solo in vendita</option>
-              <option value="no">Non in vendita</option>
+              <option value="all">{t.itemsTable.saleAll}</option>
+              <option value="yes">{t.itemsTable.saleYes}</option>
+              <option value="no">{t.itemsTable.saleNo}</option>
             </select>
             <select
               value={printingFilter}
               onChange={(e) => setPrintingFilter(e.target.value)}
               className="input w-full"
             >
-              <option value="all">Ogni tiratura</option>
-              <option value="first">Prima stampa</option>
-              <option value="reprint">Ristampa</option>
+              <option value="all">{t.itemsTable.printingAll}</option>
+              <option value="first">{t.itemsTable.printingFirst}</option>
+              <option value="reprint">{t.itemsTable.printingReprint}</option>
             </select>
             <select value={valueFilter} onChange={(e) => setValueFilter(e.target.value)} className="input w-full">
-              <option value="all">Valore: tutti</option>
-              <option value="valued">Con valutazione</option>
-              <option value="missing">Da valutare</option>
+              <option value="all">{t.itemsTable.valueAll}</option>
+              <option value="valued">{t.itemsTable.valueValued}</option>
+              <option value="missing">{t.itemsTable.valueMissing}</option>
             </select>
 
             {languages.length > 0 && (
               <fieldset className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2">
-                <legend className="px-1 text-xs text-slate-400">Lingua</legend>
+                <legend className="px-1 text-xs text-slate-400">{t.itemsTable.languageLegend}</legend>
                 <div className="flex flex-wrap gap-x-4 gap-y-2">
                   {languages.map((language) => (
                     <label key={language} className="flex items-center gap-2 text-sm text-slate-200">
@@ -434,8 +436,8 @@ export default function ItemsTable({
       {filtered.length === 0 ? (
         <div className="rounded-xl border border-slate-800 px-4 py-10 text-center text-slate-500">
           {items.length === 0
-            ? "La collezione è ancora vuota. Registra il primo pezzo o chiedi a Koma di farlo per te."
-            : "Nessun pezzo corrisponde ai filtri selezionati."}
+            ? t.itemsTable.emptyCollection
+            : t.itemsTable.noMatches}
         </div>
       ) : view === "list" ? (
         <StockList
@@ -460,14 +462,14 @@ export default function ItemsTable({
                   <button
                     onClick={() => setEditingItem(item)}
                     className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-950/80 text-slate-300 transition hover:text-indigo-400"
-                    title="Modifica"
+                    title={t.itemsTable.edit}
                   >
                     ✎
                   </button>
                   <button
                     onClick={() => setDeletingItem(item)}
                     className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-950/80 text-slate-300 transition hover:text-red-400"
-                    title="Rimuovi"
+                    title={t.itemsTable.remove}
                   >
                     ✕
                   </button>
@@ -477,16 +479,19 @@ export default function ItemsTable({
               <button
                 type="button"
                 onClick={() => setDetailsItem(item)}
-                aria-label={`Mostra dettagli di ${item.series ?? item.title} #${item.volume_number ?? item.issue_number ?? ""}`}
+                aria-label={t.itemsTable.showDetailsOf(
+                  item.series ?? item.title,
+                  `${item.volume_number ?? item.issue_number ?? ""}`,
+                )}
                 className="relative block w-full overflow-hidden text-left focus-visible:outline-2 focus-visible:outline-indigo-400"
               >
                 <CoverImage item={item} className="aspect-[2/3] w-full" />
                 {item.is_for_sale && (
                   <span
-                    title="In vendita"
+                    title={t.itemsTable.forSale}
                     className="pointer-events-none absolute -left-9 top-4 w-32 -rotate-45 bg-rose-500 py-0.5 text-center text-[10px] font-bold uppercase tracking-wider text-white shadow-md shadow-black/40"
                   >
-                    In vendita
+                    {t.itemsTable.forSale}
                   </span>
                 )}
               </button>
@@ -499,14 +504,14 @@ export default function ItemsTable({
                   <span className="flex items-center gap-1">
                     {item.is_sealed && (
                       <span
-                        title="Sigillato nel cellophane originale"
+                        title={t.itemsTable.sealedTitle}
                         className="rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-300"
                       >
-                        Sealed
+                        {t.itemsTable.sealedBadge}
                       </span>
                     )}
                     {item.has_obi === true && (
-                      <span title="Fascetta OBI presente" className="text-amber-300">
+                      <span title={t.itemsTable.obiPresentTitle} className="text-amber-300">
                         <ObiIcon className="h-[15px] w-[15px]" />
                       </span>
                     )}
@@ -516,7 +521,7 @@ export default function ItemsTable({
                   type="button"
                   onClick={() => setDetailsItem(item)}
                   className="line-clamp-2 text-left font-medium text-slate-100 hover:text-indigo-300"
-                  title="Mostra dettagli"
+                  title={t.itemsTable.showDetails}
                 >
                   {item.series ?? item.title}
                 </button>
@@ -528,9 +533,9 @@ export default function ItemsTable({
                 </p>
                 <p className="truncate text-slate-500">
                   {item.is_first_print === true
-                    ? "Prima stampa"
+                    ? t.itemsTable.printingFirst
                     : item.is_first_print === false
-                      ? "Ristampa"
+                      ? t.itemsTable.printingReprint
                       : "-"}
                   {item.printing_notes ? ` (${item.printing_notes})` : ""}
                 </p>
@@ -538,7 +543,7 @@ export default function ItemsTable({
                 <button
                   type="button"
                   onClick={() => setHistoryItem(item)}
-                  title="Andamento del valore"
+                  title={t.itemsTable.valueTrend}
                   className="mt-auto flex items-center justify-between gap-1 rounded-md text-left font-semibold text-emerald-400 transition hover:text-emerald-300"
                 >
                   <span className="truncate">
@@ -564,7 +569,7 @@ export default function ItemsTable({
             onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
             className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-slate-800"
           >
-            Mostra altri ({filtered.length - visibleCount})
+            {t.itemsTable.showMore(filtered.length - visibleCount)}
           </button>
         </div>
       )}
@@ -608,6 +613,7 @@ function MarketSummary({
   period: TrendPeriod;
   onPeriod: (period: TrendPeriod) => void;
 }) {
+  const { t } = useTranslations();
   let up = 0;
   let down = 0;
   let from = 0;
@@ -628,17 +634,17 @@ function MarketSummary({
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-900/65 px-4 py-3 text-sm">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
         <span className="font-mono font-semibold tabular-nums">
-          <span className="mr-2 text-xs font-sans font-medium uppercase tracking-wider text-slate-500">Variazione</span>
+          <span className="mr-2 text-xs font-sans font-medium uppercase tracking-wider text-slate-500">{t.itemsTable.marketChange}</span>
           <span className={tone}>
             {sign}
             {formatMoney(Math.abs(delta))}
             {percent != null && ` (${sign}${Math.abs(percent).toLocaleString("it-IT", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}%)`}
           </span>
         </span>
-        <span className="text-emerald-300">▲ {up} in rialzo</span>
-        <span className="text-rose-300">▼ {down} in ribasso</span>
+        <span className="text-emerald-300">{t.itemsTable.marketUp(up)}</span>
+        <span className="text-rose-300">{t.itemsTable.marketDown(down)}</span>
       </div>
-      <div role="group" aria-label="Periodo" className="flex rounded-lg border border-slate-700 bg-slate-950 p-0.5">
+      <div role="group" aria-label={t.itemsTable.periodGroupLabel} className="flex rounded-lg border border-slate-700 bg-slate-950 p-0.5">
         {TREND_PERIODS.map((option) => (
           <button
             key={option.key}

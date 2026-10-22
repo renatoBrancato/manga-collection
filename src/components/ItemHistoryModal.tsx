@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { MangaItem } from "@/lib/types";
 import ValueChart, { formatDay, formatEuro } from "@/components/ValueChart";
+import { useTranslations } from "@/lib/i18n/LocaleProvider";
 
 type HistoryRow = {
   day: string;
@@ -15,25 +16,11 @@ type HistoryRow = {
 
 type TrackerLink = { series: string | null; url: string; preselected: boolean };
 
-const SOURCE_LABELS: Record<string, string> = {
-  westblue: "West Blue",
-  ebay: "annunci eBay",
-  manual: "Modifica manuale",
-  chat: "Koma",
-  mcp: "ChatGPT",
-  delete: "Rimosso",
-};
-
-const BASIS_LABELS: Record<string, string> = {
-  media_ultime_vendite: "media ultime vendite RAW",
-  media_vendite_compatibili: "mediana vendite",
-  riga_esatta_piu_recente: "riga esatta graded",
-  ebay_mediana_annunci: "mediana annunci eBay",
-  invariato_nessuna_vendita: "nessuna vendita, invariato",
-};
-
 /** Storico del valore di un singolo pezzo, disponibile anche nella vista read-only. */
 export default function ItemHistoryModal({ item, onClose }: { item: MangaItem; onClose: () => void }) {
+  const { locale, t } = useTranslations();
+  const SOURCE_LABELS = t.itemHistoryModal.sourceLabels;
+  const BASIS_LABELS = t.itemHistoryModal.basisLabels;
   const [rows, setRows] = useState<HistoryRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tracker, setTracker] = useState<TrackerLink | null>(null);
@@ -91,11 +78,15 @@ export default function ItemHistoryModal({ item, onClose }: { item: MangaItem; o
   const last = valued.at(-1)?.value ?? null;
   const delta = first != null && last != null && valued.length > 1 ? last - first : null;
   const trackerFilters = [
-    item.format === "zashi" ? "Zasshi" : item.grading_authority ? "Graded" : "Raw",
-    item.format !== "zashi" && item.volume_number != null ? `Vol. ${item.volume_number}` : null,
-    item.format === "zashi" && item.issue_number ? `N. ${item.issue_number}` : null,
-    item.grading_authority && item.grading_value != null ? `Voto ${item.grading_value}` : null,
-    item.format !== "zashi" && item.has_obi != null ? `OBI ${item.has_obi ? "sì" : "no"}` : null,
+    item.format === "zashi"
+      ? t.itemHistoryModal.filterZasshi
+      : item.grading_authority
+        ? t.itemHistoryModal.filterGraded
+        : t.itemHistoryModal.filterRaw,
+    item.format !== "zashi" && item.volume_number != null ? t.itemHistoryModal.filterVolume(item.volume_number) : null,
+    item.format === "zashi" && item.issue_number ? t.itemHistoryModal.filterIssue(item.issue_number) : null,
+    item.grading_authority && item.grading_value != null ? t.itemHistoryModal.filterGrade(item.grading_value) : null,
+    item.format !== "zashi" && item.has_obi != null ? t.itemHistoryModal.filterObi(item.has_obi) : null,
   ].filter(Boolean);
 
   return (
@@ -109,44 +100,41 @@ export default function ItemHistoryModal({ item, onClose }: { item: MangaItem; o
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">Andamento del valore</p>
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">{t.itemHistoryModal.valueTrend}</p>
             <h2 className="text-lg font-semibold text-slate-100">
               {item.series ?? item.title}
               {number != null ? ` #${number}` : ""}
               <span className="font-normal text-slate-400">{grading}</span>
             </h2>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-200" aria-label="Chiudi">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-200" aria-label={t.itemHistoryModal.close}>
             ✕
           </button>
         </div>
 
         <div className="mb-4 flex items-baseline gap-2">
           <span className="text-2xl font-semibold text-emerald-400">
-            {item.estimated_value != null ? formatEuro(item.estimated_value) : "Da valutare"}
+            {item.estimated_value != null ? formatEuro(item.estimated_value) : t.itemHistoryModal.valueToEstimate}
           </span>
           {delta != null && (
             <span className={`text-sm ${delta > 0 ? "text-emerald-400" : delta < 0 ? "text-rose-400" : "text-slate-400"}`}>
-              {delta > 0 ? "▲" : delta < 0 ? "▼" : "■"} {formatEuro(Math.abs(delta))} dal {formatDay(valued[0].day)}
+              {delta > 0 ? "▲" : delta < 0 ? "▼" : "■"} {formatEuro(Math.abs(delta))}{" "}
+              {t.itemHistoryModal.since(formatDay(valued[0].day, locale))}
             </span>
           )}
         </div>
 
         {error ? (
-          <p className="py-6 text-center text-sm text-rose-400">Storico non disponibile: {error}</p>
+          <p className="py-6 text-center text-sm text-rose-400">{t.itemHistoryModal.historyUnavailable(error)}</p>
         ) : rows == null ? (
-          <p className="py-6 text-center text-sm text-slate-500">Caricamento…</p>
+          <p className="py-6 text-center text-sm text-slate-500">{t.itemHistoryModal.loading}</p>
         ) : rows.length === 0 ? (
-          <p className="py-6 text-center text-sm text-slate-500">
-            Nessuna valutazione registrata finora. Lo storico si aggiorna ogni giorno.
-          </p>
+          <p className="py-6 text-center text-sm text-slate-500">{t.itemHistoryModal.noValuations}</p>
         ) : (
           <>
             <ValueChart points={rows} height={130} />
             {rows.length === 1 && (
-              <p className="mt-2 text-center text-xs text-slate-500">
-                Primo punto registrato: dal prossimo aggiornamento vedrai l&apos;andamento.
-              </p>
+              <p className="mt-2 text-center text-xs text-slate-500">{t.itemHistoryModal.firstPointRecorded}</p>
             )}
 
             <ul className="mt-4 divide-y divide-slate-800 text-sm">
@@ -156,11 +144,11 @@ export default function ItemHistoryModal({ item, onClose }: { item: MangaItem; o
                 .map((row) => (
                   <li key={row.day} className="flex items-center justify-between gap-3 py-2">
                     <div>
-                      <div className="text-slate-200">{formatDay(row.day)}</div>
+                      <div className="text-slate-200">{formatDay(row.day, locale)}</div>
                       <div className="text-xs text-slate-500">
                         {SOURCE_LABELS[row.source ?? ""] ?? row.source ?? "—"}
                         {row.basis && BASIS_LABELS[row.basis] ? ` · ${BASIS_LABELS[row.basis]}` : ""}
-                        {row.match_count ? ` · ${row.match_count} vendite` : ""}
+                        {row.match_count ? ` · ${t.itemHistoryModal.salesCount(row.match_count)}` : ""}
                       </div>
                     </div>
                     <span className="font-medium text-slate-100">
@@ -180,16 +168,20 @@ export default function ItemHistoryModal({ item, onClose }: { item: MangaItem; o
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 font-medium text-indigo-300 hover:text-indigo-200"
             >
-              Vedi su West Blue
+              {t.itemHistoryModal.viewOnWestBlue}
               {tracker.series ? <span className="text-slate-400">· {tracker.series}</span> : null}
               <span aria-hidden="true">↗</span>
             </a>
             <p className="mt-1 text-xs text-slate-500">
               {tracker.series == null
-                ? "Serie non trovata nel tracker: cercala a mano."
+                ? t.itemHistoryModal.seriesNotFound
                 : tracker.preselected
-                  ? `Imposta sulla pagina: ${trackerFilters.join(" · ")}.`
-                  : `Scegli ${trackerFilters[0]} e cerca "${tracker.series}", poi: ${trackerFilters.slice(1).join(" · ") || "nessun altro filtro"}.`}
+                  ? t.itemHistoryModal.presetOnPage(trackerFilters.join(" · "))
+                  : t.itemHistoryModal.chooseAndSearch(
+                      String(trackerFilters[0]),
+                      tracker.series,
+                      trackerFilters.slice(1).join(" · ") || t.itemHistoryModal.noOtherFilter
+                    )}
             </p>
           </div>
         )}

@@ -3,14 +3,16 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "@/lib/i18n/LocaleProvider";
 
 export default function RegenerateKeyButton() {
   const supabase = createClient();
   const router = useRouter();
+  const { t } = useTranslations();
   const [loading, setLoading] = useState(false);
 
   async function handleRegenerate() {
-    if (!confirm("Rigenerare la API key? La vecchia smetterà subito di funzionare nel GPT.")) return;
+    if (!confirm(t.regenerateKeyButton.confirm)) return;
     setLoading(true);
     const {
       data: { user },
@@ -28,7 +30,7 @@ export default function RegenerateKeyButton() {
       disabled={loading}
       className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-slate-800 disabled:opacity-50"
     >
-      {loading ? "..." : "Rigenera key"}
+      {loading ? t.regenerateKeyButton.loading : t.regenerateKeyButton.label}
     </button>
   );
 }

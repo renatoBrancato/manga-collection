@@ -9,6 +9,7 @@ import DonateButton from "@/components/DonateButton";
 import CollectionValueChart from "@/components/CollectionValueChart";
 import { loadCollectionHistory } from "@/lib/history";
 import { loadItemTrends } from "@/lib/trends";
+import { getLocale, getDictionary } from "@/lib/i18n/server";
 import type { MangaItem } from "@/lib/types";
 
 /**
@@ -35,11 +36,14 @@ export async function generateMetadata({
     .eq("share_slug", slug)
     .maybeSingle();
 
-  if (!profile?.share_enabled) return { title: "Collezione non disponibile" };
+  const locale = await getLocale();
+  const t = getDictionary(locale).shareView;
 
-  const owner = profile.display_name?.trim() || "un collezionista";
-  const title = `La collezione di ${owner}`;
-  const description = "Tankōbon e Shonen Jump catalogati e valutati su Manga Collection.";
+  if (!profile?.share_enabled) return { title: t.metaTitleUnavailable };
+
+  const owner = profile.display_name?.trim() || t.metaOwnerFallback;
+  const title = `${t.titlePrefix} ${owner}`;
+  const description = t.metaDescription;
 
   return {
     title,
@@ -65,22 +69,24 @@ export default async function SharedCollectionPage({
 
   if (!profile || !profile.share_enabled) notFound();
 
-  const [{ data: items }, history, trends] = await Promise.all([
+  const [{ data: items }, history, trends, locale] = await Promise.all([
     admin.from("items").select("*").eq("user_id", profile.id).order("created_at", { ascending: false }),
     loadCollectionHistory(admin, profile.id),
     loadItemTrends(admin, profile.id),
+    getLocale(),
   ]);
+  const t = getDictionary(locale).shareView;
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-slate-50 sm:px-8">
       <CollectionHero
-        eyebrow="私のコレクション · Sola lettura"
-        title={`La collezione di ${profile.display_name || "un collezionista"},`}
-        highlight="volume dopo volume."
-        description="Una raccolta condivisa pubblicamente: sfogliala, ma solo il proprietario può modificarla."
+        eyebrow={t.eyebrow}
+        title={`${t.titlePrefix} ${profile.display_name || t.titleFallbackOwner},`}
+        highlight={t.highlight}
+        description={t.description}
         footer={
           <Link href="/dashboard" className="underline transition hover:text-slate-300">
-            Gestisci la tua collezione su Manga Collection
+            {t.manageLink}
           </Link>
         }
         actions={<DonateButton />}

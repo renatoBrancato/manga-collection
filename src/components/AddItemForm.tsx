@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useTranslations } from "@/lib/i18n/LocaleProvider";
 
 /**
  * Manual "add item" form for the dashboard, used when the user wants to add
  * a volume/issue without going through the MCP scanning flow.
  */
 export default function AddItemForm({ userId }: { userId: string }) {
+  const { t } = useTranslations();
   const supabase = createClient();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -80,8 +82,8 @@ export default function AddItemForm({ userId }: { userId: string }) {
             </svg>
           </span>
           <span>
-            <span className="block font-semibold text-white">Inserisci volume manualmente</span>
-            <span className="mt-0.5 block text-xs text-slate-400">Altrimenti chiedi a Koma</span>
+            <span className="block font-semibold text-white">{t.addItemForm.openButtonTitle}</span>
+            <span className="mt-0.5 block text-xs text-slate-400">{t.addItemForm.openButtonSubtitle}</span>
           </span>
         </span>
         <svg
@@ -108,15 +110,15 @@ export default function AddItemForm({ userId }: { userId: string }) {
         onChange={(e) => setFormat(e.target.value as "tankobon" | "zashi")}
         className="input"
       >
-        <option value="tankobon">Tankobon (volume)</option>
-        <option value="zashi">Zashi (rivista, es. Shonen Jump)</option>
+        <option value="tankobon">{t.addItemForm.formatTankobon}</option>
+        <option value="zashi">{t.addItemForm.formatZashi}</option>
       </select>
-      <input name="series" required placeholder="Serie/Titolo *" className="input" />
+      <input name="series" required placeholder={t.addItemForm.seriesPlaceholder} className="input" />
 
       {format === "tankobon" ? (
-        <input name="volume_number" type="number" step="0.1" placeholder="Numero volume" className="input" />
+        <input name="volume_number" type="number" step="0.1" placeholder={t.addItemForm.volumeNumberPlaceholder} className="input" />
       ) : (
-        <input name="issue_number" placeholder="Numero/uscita" className="input" />
+        <input name="issue_number" placeholder={t.addItemForm.issueNumberPlaceholder} className="input" />
       )}
       <input
         name="release_year"
@@ -124,31 +126,31 @@ export default function AddItemForm({ userId }: { userId: string }) {
         min="1900"
         max="2100"
         step="1"
-        placeholder="Anno di uscita"
+        placeholder={t.addItemForm.releaseYearPlaceholder}
         className="input"
       />
-      <input name="publisher" placeholder="Editore" className="input" />
-      <input name="isbn" placeholder="ISBN" className="input" />
+      <input name="publisher" placeholder={t.addItemForm.publisherPlaceholder} className="input" />
+      <input name="isbn" placeholder={t.addItemForm.isbnPlaceholder} className="input" />
 
       <select name="is_first_print" defaultValue="" className="input">
-        <option value="">Prima stampa? (non specificato)</option>
-        <option value="true">Sì, prima stampa (初版)</option>
-        <option value="false">No, ristampa</option>
+        <option value="">{t.addItemForm.firstPrintUnspecified}</option>
+        <option value="true">{t.addItemForm.firstPrintYes}</option>
+        <option value="false">{t.addItemForm.firstPrintNo}</option>
       </select>
       <select name="has_obi" defaultValue="" className="input">
-        <option value="">Fascetta OBI? (non specificato)</option>
-        <option value="true">Sì, presente</option>
-        <option value="false">No, assente</option>
+        <option value="">{t.addItemForm.obiUnspecified}</option>
+        <option value="true">{t.addItemForm.obiYes}</option>
+        <option value="false">{t.addItemForm.obiNo}</option>
       </select>
       <select name="is_sealed" defaultValue="false" className="input">
-        <option value="false">Non sigillato</option>
-        <option value="true">Sigillato (cellophane originale)</option>
+        <option value="false">{t.addItemForm.sealedNo}</option>
+        <option value="true">{t.addItemForm.sealedYes}</option>
       </select>
       <select name="is_for_sale" defaultValue="false" className="input">
-        <option value="false">Non in vendita</option>
-        <option value="true">In vendita</option>
+        <option value="false">{t.addItemForm.forSaleNo}</option>
+        <option value="true">{t.addItemForm.forSaleYes}</option>
       </select>
-      <input name="printing_notes" placeholder="Note stampa (es. 3a ristampa)" className="input" />
+      <input name="printing_notes" placeholder={t.addItemForm.printingNotesPlaceholder} className="input" />
 
       <label className="col-span-full flex items-center gap-2 text-sm text-slate-300">
         <input
@@ -157,7 +159,7 @@ export default function AddItemForm({ userId }: { userId: string }) {
           onChange={(e) => setGraded(e.target.checked)}
           className="h-4 w-4 rounded border-slate-700 bg-slate-950"
         />
-        Gradato da un ente (CGC/CBCS/BGS)
+        {t.addItemForm.gradedLabel}
       </label>
 
       {graded ? (
@@ -166,15 +168,15 @@ export default function AddItemForm({ userId }: { userId: string }) {
             <option value="CGC">CGC</option>
             <option value="CBCS">CBCS</option>
             <option value="BGS">BGS</option>
-            <option value="altro">Altro</option>
+            <option value="altro">{t.addItemForm.gradingAuthorityOther}</option>
           </select>
-          <input name="grading_value" type="number" step="0.1" placeholder="Voto (es. 9.8)" className="input" />
+          <input name="grading_value" type="number" step="0.1" placeholder={t.addItemForm.gradingValuePlaceholder} className="input" />
         </>
       ) : (
-        <input name="condition_estimate" placeholder="Stima condizione (es. buono)" className="input" />
+        <input name="condition_estimate" placeholder={t.addItemForm.conditionEstimatePlaceholder} className="input" />
       )}
 
-      <input name="estimated_value" type="number" step="0.01" placeholder="Valore stimato (€)" className="input" />
+      <input name="estimated_value" type="number" step="0.01" placeholder={t.addItemForm.estimatedValuePlaceholder} className="input" />
 
       <div className="col-span-full flex items-center gap-2">
         <button
@@ -182,14 +184,14 @@ export default function AddItemForm({ userId }: { userId: string }) {
           disabled={saving}
           className="rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-400 disabled:opacity-50"
         >
-          {saving ? "Salvataggio..." : "Salva"}
+          {saving ? t.addItemForm.saving : t.addItemForm.save}
         </button>
         <button
           type="button"
           onClick={() => setOpen(false)}
           className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
         >
-          Annulla
+          {t.addItemForm.cancel}
         </button>
         {error && <span className="text-sm text-red-400">{error}</span>}
       </div>

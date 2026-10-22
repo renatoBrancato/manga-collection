@@ -4,6 +4,7 @@ import type { MangaItem } from "@/lib/types";
 import ObiIcon from "@/components/ObiIcon";
 import { formatMoney, formatMoneyDelta } from "@/lib/money";
 import { type ItemChange, type ItemTrends, type TrendPeriod, itemChange, sparklineValues } from "@/lib/trends";
+import { useTranslations } from "@/lib/i18n/LocaleProvider";
 
 const FORMAT_LABELS: Record<string, string> = { tankobon: "Tankobon", zashi: "Zashi" };
 
@@ -28,8 +29,9 @@ export function tickerSymbol(item: MangaItem): string {
 }
 
 export function ChangeBadge({ change, currency, compact = false }: { change: ItemChange | null; currency: string; compact?: boolean }) {
+  const { t } = useTranslations();
   if (!change) {
-    return <span className="text-xs text-slate-600" title="Nessuno storico di prezzo">—</span>;
+    return <span className="text-xs text-slate-600" title={t.stockList.noPriceHistory}>—</span>;
   }
   const up = change.delta > 0.004;
   const down = change.delta < -0.004;
@@ -44,7 +46,7 @@ export function ChangeBadge({ change, currency, compact = false }: { change: Ite
   return (
     <span
       className={`inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 font-mono text-xs font-semibold tabular-nums ${tone}`}
-      title={`Da ${euro(change.from, currency)} a ${euro(change.to, currency)}`}
+      title={t.stockList.changeTitle(euro(change.from, currency), euro(change.to, currency))}
     >
       <span aria-hidden="true" className="text-[10px]">{arrow}</span>
       {compact || (!up && !down) ? percent || euro(change.delta, currency, true) : (
@@ -102,13 +104,14 @@ export default function StockList({
   onEdit: (item: MangaItem) => void;
   onDelete: (item: MangaItem) => void;
 }) {
+  const { t } = useTranslations();
   return (
     <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/50">
       <div className="hidden grid-cols-[minmax(0,1fr)_88px_120px_170px_56px] items-center gap-4 border-b border-white/10 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 md:grid">
-        <span>Titolo</span>
-        <span>Trend</span>
-        <span className="text-right">Valore</span>
-        <span className="text-right">Variazione</span>
+        <span>{t.stockList.titleColumn}</span>
+        <span>{t.stockList.trendColumn}</span>
+        <span className="text-right">{t.stockList.valueColumn}</span>
+        <span className="text-right">{t.stockList.changeColumn}</span>
         <span />
       </div>
       <ul className="divide-y divide-white/5">
@@ -122,7 +125,7 @@ export default function StockList({
           const details = [
             FORMAT_LABELS[item.format] ?? item.format,
             item.release_year,
-            item.is_first_print === true ? "Prima stampa" : item.is_first_print === false ? "Ristampa" : null,
+            item.is_first_print === true ? t.stockList.firstPrint : item.is_first_print === false ? t.stockList.reprint : null,
             item.grading_authority
               ? `${item.grading_authority}${item.grading_value != null ? ` ${item.grading_value}` : ""}`
               : shortCondition(item.condition_estimate),
@@ -143,7 +146,7 @@ export default function StockList({
                         ? "border-rose-500/30 text-rose-300"
                         : "border-slate-700 text-slate-400"
                   }`}
-                  title="Sigla"
+                  title={t.stockList.tickerTitle}
                 >
                   <span className="block truncate">{tickerSymbol(item)}</span>
                 </span>
@@ -155,7 +158,7 @@ export default function StockList({
                         event.stopPropagation();
                         onDetails(item);
                       }}
-                      title="Mostra dettagli"
+                      title={t.stockList.showDetails}
                       className="truncate text-left hover:text-indigo-300"
                     >
                       {item.series ?? item.title}
@@ -163,7 +166,7 @@ export default function StockList({
                     </button>
                     {item.is_for_sale && (
                       <span className="shrink-0 rounded bg-rose-500 px-1.5 py-px text-[9px] font-bold uppercase tracking-wider text-white">
-                        In vendita
+                        {t.stockList.forSale}
                       </span>
                     )}
                     {item.is_sealed && (
@@ -171,7 +174,7 @@ export default function StockList({
                     )}
                     {item.has_obi === true && (
                       <span
-                        title="Fascetta OBI presente"
+                        title={t.stockList.obiPresentTitle}
                         className="flex shrink-0 items-center gap-1 rounded bg-amber-400/15 px-1.5 py-px text-[9px] font-bold uppercase tracking-wider text-amber-300"
                       >
                         <ObiIcon className="h-2.5 w-2.5" />
@@ -189,7 +192,7 @@ export default function StockList({
 
               <div className="flex flex-col items-end gap-1 md:contents">
                 <span className="text-right font-mono text-sm font-semibold tabular-nums text-slate-100">
-                  {item.estimated_value != null ? euro(item.estimated_value, currency) : <span className="text-slate-600">da valutare</span>}
+                  {item.estimated_value != null ? euro(item.estimated_value, currency) : <span className="text-slate-600">{t.stockList.toBeValued}</span>}
                 </span>
                 <span className="text-right">
                   <ChangeBadge change={change} currency={currency} />
@@ -204,14 +207,14 @@ export default function StockList({
                   <button
                     onClick={() => onEdit(item)}
                     className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-white/10 hover:text-indigo-300"
-                    title="Modifica"
+                    title={t.stockList.edit}
                   >
                     ✎
                   </button>
                   <button
                     onClick={() => onDelete(item)}
                     className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-white/10 hover:text-rose-300"
-                    title="Rimuovi"
+                    title={t.stockList.remove}
                   >
                     ✕
                   </button>

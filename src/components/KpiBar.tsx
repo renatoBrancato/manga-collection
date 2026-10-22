@@ -1,6 +1,9 @@
+"use client";
+
 import type { MangaItem } from "@/lib/types";
 import ObiIcon from "./ObiIcon";
 import { formatMoney } from "@/lib/money";
+import { useTranslations } from "@/lib/i18n/LocaleProvider";
 
 /**
  * Icone a tratto disegnate a mano: le emoji rendono in modo diverso su ogni
@@ -25,6 +28,7 @@ function formatCurrency(value: number) {
  * L'icona dell'OBI è la stessa usata sulle schede della collezione.
  */
 export default function KpiBar({ items }: { items: MangaItem[] }) {
+  const { t } = useTranslations();
   const total = items.length;
   const totalValue = items.reduce((sum, i) => sum + (i.estimated_value ?? 0), 0);
   const series = new Set(items.map((i) => i.series || i.title)).size;
@@ -45,26 +49,26 @@ export default function KpiBar({ items }: { items: MangaItem[] }) {
   ).sort((a, b) => b[1] - a[1])[0];
 
   const kpis = [
-    { label: "Volumi totali", kana: "総数", kanji: "冊", path: icon.stack, value: total.toString() },
-    { label: "Valore stimato", kana: "評価額", kanji: "円", path: icon.coins, value: formatCurrency(totalValue), accent: true },
-    { label: "Serie diverse", kana: "作品", kanji: "作", path: icon.folders, value: series.toString() },
-    { label: "Tankobon / Zashi", kana: "単行本・雑誌", kanji: "単", path: icon.book, value: `${tankobon} / ${zashi}` },
-    { label: "Pezzi gradati", kana: "鑑定済み", kanji: "鑑", path: icon.medal, value: graded.toString() },
-    { label: "Prima stampa", kana: "初版", kanji: "初", text: "1st", value: firstPrints.toString() },
+    { label: t.kpiBar.totalVolumes, kana: "総数", kanji: "冊", path: icon.stack, value: total.toString() },
+    { label: t.kpiBar.estimatedValue, kana: "評価額", kanji: "円", path: icon.coins, value: formatCurrency(totalValue), accent: true },
+    { label: t.kpiBar.differentSeries, kana: "作品", kanji: "作", path: icon.folders, value: series.toString() },
+    { label: t.kpiBar.tankobonZashi, kana: "単行本・雑誌", kanji: "単", path: icon.book, value: `${tankobon} / ${zashi}` },
+    { label: t.kpiBar.gradedItems, kana: "鑑定済み", kanji: "鑑", path: icon.medal, value: graded.toString() },
+    { label: t.kpiBar.firstPrint, kana: "初版", kanji: "初", text: "1st", value: firstPrints.toString() },
     {
-      label: "Con OBI / Senza",
+      label: t.kpiBar.withWithoutObi,
       kana: "帯あり・なし",
       kanji: "帯",
       obi: true,
       value: `${withObi} / ${withoutObi}`,
-      hint: obiUnknown > 0 ? `${obiUnknown} con OBI non specificato` : undefined,
+      hint: obiUnknown > 0 ? t.kpiBar.obiUnknown(obiUnknown) : undefined,
     },
     {
-      label: "Serie più numerosa",
+      label: t.kpiBar.topSeries,
       kana: "最多作品",
       kanji: "王",
       path: icon.crown,
-      value: topSeriesEntry ? `${topSeriesEntry[0]} (${topSeriesEntry[1]})` : "-",
+      value: topSeriesEntry ? `${topSeriesEntry[0]} (${topSeriesEntry[1]})` : t.kpiBar.noValue,
     },
   ];
 

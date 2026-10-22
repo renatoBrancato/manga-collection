@@ -1,0 +1,38 @@
+const stockList = {
+  it: {
+    noPriceHistory: "Nessuno storico di prezzo",
+    changeTitle: (from: string, to: string) => `Da ${from} a ${to}`,
+    titleColumn: "Titolo",
+    trendColumn: "Trend",
+    valueColumn: "Valore",
+    changeColumn: "Variazione",
+    firstPrint: "Prima stampa",
+    reprint: "Ristampa",
+    tickerTitle: "Sigla",
+    showDetails: "Mostra dettagli",
+    forSale: "In vendita",
+    obiPresentTitle: "Fascetta OBI presente",
+    toBeValued: "da valutare",
+    edit: "Modifica",
+    remove: "Rimuovi",
+  },
+  en: {
+    noPriceHistory: "No price history",
+    changeTitle: (from: string, to: string) => `From ${from} to ${to}`,
+    titleColumn: "Title",
+    trendColumn: "Trend",
+    valueColumn: "Value",
+    changeColumn: "Change",
+    firstPrint: "First print",
+    reprint: "Reprint",
+    tickerTitle: "Ticker",
+    showDetails: "Show details",
+    forSale: "For sale",
+    obiPresentTitle: "OBI strip present",
+    toBeValued: "to be valued",
+    edit: "Edit",
+    remove: "Remove",
+  },
+};
+
+export default stockList;

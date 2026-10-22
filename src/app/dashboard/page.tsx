@@ -11,8 +11,10 @@ import AiChatPanel from "@/components/AiChatPanel";
 import CollectionHero from "@/components/CollectionHero";
 import CollectionValueChart from "@/components/CollectionValueChart";
 import DashboardRecovery from "@/components/DashboardRecovery";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { loadCollectionHistory } from "@/lib/history";
 import { loadItemTrends } from "@/lib/trends";
+import { getTranslations } from "@/lib/i18n/server";
 import type { MangaItem } from "@/lib/types";
 
 export default async function DashboardPage() {
@@ -23,11 +25,12 @@ export default async function DashboardPage() {
 
   if (!user) redirect("/login");
 
-  const [itemsResult, { data: profile }, history, trends] = await Promise.all([
+  const [itemsResult, { data: profile }, history, trends, { t }] = await Promise.all([
     loadItems(supabase, user.id),
     supabase.from("profiles").select("share_enabled, share_slug").eq("id", user.id).single(),
     loadCollectionHistory(supabase, user.id),
     loadItemTrends(supabase, user.id),
+    getTranslations(),
   ]);
   const items = itemsResult.items;
   const failed = itemsResult.failed;
@@ -38,9 +41,9 @@ export default async function DashboardPage() {
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-slate-50 sm:px-8">
       <CollectionHero
-        title="La tua storia,"
-        highlight="volume dopo volume."
-        description="Ogni collezione ha il suo primo capitolo. Cataloga, valorizza e custodisci ogni pezzo della tua."
+        title={t.dashboard.heroTitle}
+        highlight={t.dashboard.heroHighlight}
+        description={t.dashboard.heroDescription}
         footer={user.email}
         actions={
           <>
@@ -53,9 +56,10 @@ export default async function DashboardPage() {
               href="/settings"
               className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white"
             >
-              MCP
+              {t.dashboard.mcpLink}
             </Link>
             <DonateButton />
+            <LanguageSwitcher />
             <LogoutButton />
           </>
         }

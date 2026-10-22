@@ -2,9 +2,14 @@ import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { Dela_Gothic_One } from "next/font/google";
 import GoogleLoginButton from "@/components/landing/GoogleLoginButton";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { createClient } from "@/lib/supabase/server";
+import { getTranslations } from "@/lib/i18n/server";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 
 const DONATE_URL = process.env.NEXT_PUBLIC_DONATE_URL || "https://paypal.me/AkatsukiBank";
+
+type LoginDict = Dictionary["login"];
 
 // Font "da copertina": supporta sia il latino sia kana/kanji.
 const display = Dela_Gothic_One({ weight: "400", subsets: ["latin"], preload: false });
@@ -19,6 +24,8 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const { error, reason } = await searchParams;
   const authFailed = error === "auth_failed";
   const reasonText = typeof reason === "string" ? reason : null;
+  const { t: dict } = await getTranslations();
+  const t = dict.login;
 
   return (
     <main className="manga-paper relative min-h-screen overflow-x-hidden">
@@ -26,15 +33,18 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
       <div className="border-b-4 border-[#111] bg-[#111] text-[#f3eee2]">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.25em] sm:px-6">
           <span className={display.className}>週刊 マンガコレクション</span>
-          <span className="hidden sm:inline">N.1 · edizione speciale · prezzo: gratis</span>
-          <span className="rounded-sm bg-[#e60012] px-2 py-0.5 text-white">新連載</span>
+          <span className="hidden sm:inline">{t.editionLabel}</span>
+          <div className="flex items-center gap-3">
+            <LanguageSwitcher />
+            <span className="rounded-sm bg-[#e60012] px-2 py-0.5 text-white">新連載</span>
+          </div>
         </div>
       </div>
 
       {authFailed && (
         <div className="mx-auto mt-4 max-w-6xl px-4 sm:px-6">
           <div role="alert" className="border-[3px] border-[#111] bg-[#ffe600] px-4 py-3 text-sm font-bold shadow-[4px_4px_0_#111]">
-            ⚠️ Accesso non riuscito{reasonText ? `: ${reasonText}` : ""}. Riprova.
+            {t.authFailedPrefix}{reasonText ? `: ${reasonText}` : ""}{t.authFailedSuffix}
           </div>
         </div>
       )}
@@ -50,35 +60,35 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
 
         <div className="manga-rise relative z-10">
           <p className="mb-4 inline-flex items-center gap-2 border-2 border-[#111] bg-white px-3 py-1 text-xs font-black uppercase tracking-[0.2em]">
-            <span className="text-[#e60012]">第1話</span> Capitolo 1
+            <span className="text-[#e60012]">第1話</span> {t.chapterLabel}
           </p>
           <h1 className={`${display.className} text-[2.6rem] leading-[1.02] sm:text-6xl lg:text-7xl`}>
-            Ogni volume
+            {t.heroLine1}
             <br />
-            ha la sua
+            {t.heroLine2}
             <br />
             <span className="relative inline-block">
-              <span className="relative z-10 text-[#e60012]">storia.</span>
+              <span className="relative z-10 text-[#e60012]">{t.heroLine3}</span>
               <span aria-hidden="true" className="absolute -bottom-1 left-0 right-0 h-4 -rotate-1 bg-[#ffe600]" />
             </span>
           </h1>
           <p className="mt-3 inline-block -rotate-2 border-2 border-[#111] bg-white px-3 py-1 text-sm font-black uppercase tracking-wider shadow-[3px_3px_0_#111]">
-            …e anche un <span className="text-[#e60012]">prezzo</span>.
+            {t.heroPriceBefore}<span className="text-[#e60012]">{t.heroPriceWord}</span>{t.heroPriceAfter}
           </p>
           <p className="mt-6 max-w-lg text-base font-medium leading-relaxed text-[#111]/80 sm:text-lg">
-            Tankōbon, zashi di Shōnen Jump, prime stampe con OBI, pezzi gradati. Fotografali:{" "}
-            <strong className="text-[#111]">Koma</strong> li riconosce, li cataloga e ti dice quanto valgono,
-            sulle vendite reali in Giappone.
+            {t.heroDescriptionBefore}
+            <strong className="text-[#111]">Koma</strong>
+            {t.heroDescriptionAfter}
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-5">
-            <GoogleLoginButton label="Inizia la tua saga" />
+            <GoogleLoginButton label={t.ctaStart} />
             <span className="text-xs font-bold uppercase tracking-wider text-[#111]/60">
-              Gratis · nessuna carta · 10 secondi
+              {t.freeNote}
             </span>
           </div>
         </div>
 
-        <HeroBook />
+        <HeroBook t={t} />
       </section>
 
       {/* Nastro scorrevole */}
@@ -87,15 +97,15 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
         <div className="manga-marquee flex w-max gap-10 whitespace-nowrap text-sm font-black uppercase tracking-[0.2em]">
           {Array.from({ length: 3 }).map((_, i) => (
             <span key={i} aria-hidden={i > 0} className="flex shrink-0 gap-10 pr-10">
-              <span>📸 Scatta</span>
+              <span>{t.marquee[0]}</span>
               <span className={display.className}>ドン！</span>
-              <span>💴 Valuta</span>
+              <span>{t.marquee[1]}</span>
               <span className={display.className}>ゴゴゴ</span>
-              <span>📈 Segui il valore</span>
+              <span>{t.marquee[2]}</span>
               <span className={display.className}>バーン！</span>
-              <span>🏷️ Metti in vendita</span>
+              <span>{t.marquee[3]}</span>
               <span className={display.className}>ドドド</span>
-              <span>🔗 Condividi</span>
+              <span>{t.marquee[4]}</span>
             </span>
           ))}
         </div>
@@ -105,55 +115,50 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
       {/* LA TAVOLA: funzionalità come vignette, lette da destra a sinistra */}
       <section className="mx-auto max-w-6xl px-4 pb-6 pt-16 sm:px-6">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-          <h2 className={`${display.className} text-3xl sm:text-4xl`}>Come funziona</h2>
+          <h2 className={`${display.className} text-3xl sm:text-4xl`}>{t.howItWorks}</h2>
           <p className="text-xs font-bold uppercase tracking-widest text-[#111]/60">
-            <span className="hidden md:inline">← si legge da destra a sinistra, come un vero manga</span>
-            <span className="md:hidden">↓ una vignetta alla volta</span>
+            <span className="hidden md:inline">{t.readDirectionDesktop}</span>
+            <span className="md:hidden">{t.readDirectionMobile}</span>
           </p>
         </div>
 
         <div dir="rtl" className="grid gap-4 border-4 border-[#111] bg-[#111] p-4 md:grid-cols-6">
-          <Koma n={1} title="Scatta" sfx="カシャッ" className="md:col-span-4 md:row-span-2" tone>
+          <Koma n={1} title={t.komaScatta} sfx="カシャッ" className="md:col-span-4 md:row-span-2" tone>
+            <p>{t.koma1Text}</p>
+            <ScanDemo t={t} />
+          </Koma>
+
+          <Koma n={2} title={t.komaValuta} sfx="ズキューン" className="md:col-span-2">
             <p>
-              Una o più foto: copertina, dorso, colophon. Koma legge serie, numero, lingua, editore,
-              prima stampa, OBI, sigillato e condizione.
+              {t.koma2TextBefore}<b>West Blue</b>{t.koma2TextMiddle}<b>eBay</b>{t.koma2TextAfter}
             </p>
-            <ScanDemo />
+            <PriceTag t={t} />
           </Koma>
 
-          <Koma n={2} title="Valuta" sfx="ズキューン" className="md:col-span-2">
+          <Koma n={3} title={t.komaSegui} className="md:col-span-2">
+            <p>{t.koma3Text}</p>
+            <Sparkline t={t} />
+          </Koma>
+
+          <Koma n={4} title={t.komaParla} className="md:col-span-3">
+            <ChatDemo t={t} />
+          </Koma>
+
+          <Koma n={5} title={t.komaMostra} sfx="バーン" className="md:col-span-3" tone>
             <p>
-              Vendite concluse in Giappone tramite <b>West Blue</b>. Per edizioni italiane, francesi e
-              zashi recenti, gli annunci <b>eBay</b> del mercato giusto.
-            </p>
-            <PriceTag />
-          </Koma>
-
-          <Koma n={3} title="Segui il valore" className="md:col-span-2">
-            <p>Ogni rivalutazione finisce nello storico: vedi la collezione salire (o scendere).</p>
-            <Sparkline />
-          </Koma>
-
-          <Koma n={4} title="Parla con Koma" className="md:col-span-3">
-            <ChatDemo />
-          </Koma>
-
-          <Koma n={5} title="Mostrala. Vendila." sfx="バーン" className="md:col-span-3" tone>
-            <p>
-              Un link pubblico in sola lettura per amici e acquirenti. Tagga i pezzi{" "}
-              <span className="inline-block -rotate-3 bg-[#e60012] px-1.5 text-xs font-black text-white">IN VENDITA</span>{" "}
-              e filtrali in un attimo.
+              {t.koma5TextBefore}
+              <span className="inline-block -rotate-3 bg-[#e60012] px-1.5 text-xs font-black text-white">{t.koma5Badge}</span>{" "}
+              {t.koma5TextAfter}
             </p>
           </Koma>
 
-          <Koma n={6} title="Anche da ChatGPT" className="md:col-span-6">
+          <Koma n={6} title={t.komaChatgpt} className="md:col-span-6">
             <div className="flex flex-wrap items-center justify-between gap-4" dir="ltr">
               <p className="max-w-2xl">
-                Colleghi il connettore <b>MCP</b> a ChatGPT e scansioni i volumi direttamente dalla chat che
-                usi già. Finiscono tutti nella stessa collezione.
+                {t.koma6Text}
               </p>
               <code className="border-2 border-[#111] bg-[#111] px-3 py-1.5 font-mono text-xs text-[#ffe600]">
-                /api/mcp · Bearer ••••••
+                /api/mcp · ******
               </code>
             </div>
           </Koma>
@@ -167,10 +172,10 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           <div className="relative">
             <p className={`${display.className} text-5xl text-[#e60012] sm:text-7xl`}>つづく…</p>
             <p className="mt-3 text-sm font-bold uppercase tracking-[0.3em] text-[#111]/60">
-              Il prossimo capitolo lo scrivi tu
+              {t.tsuzukuSubtitle}
             </p>
             <div className="mt-8 flex justify-center">
-              <GoogleLoginButton label="Apri la tua collezione" variant="paper" />
+              <GoogleLoginButton label={t.ctaOpen} variant="paper" />
             </div>
           </div>
         </div>
@@ -183,7 +188,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
             rel="noopener noreferrer"
             className="border-2 border-[#111] bg-[#ffe600] px-3 py-1 text-[#111] shadow-[3px_3px_0_#111] transition hover:-translate-y-0.5"
           >
-            ☕ Offri un caffè all&apos;autore
+            {t.donateLink}
           </a>
         </footer>
       </section>
@@ -236,7 +241,7 @@ function Koma({
 }
 
 /** Tankōbon in 3D disegnato in CSS, con la fascia OBI. */
-function HeroBook() {
+function HeroBook({ t }: { t: LoginDict }) {
   return (
     <div className="relative mx-auto flex h-[380px] w-full max-w-[420px] items-center justify-center sm:h-[440px]">
       <div aria-hidden="true" className="manga-speedlines absolute -inset-10 opacity-20" />
@@ -273,9 +278,9 @@ function HeroBook() {
             <div className="absolute right-5 top-[40%] h-16 w-1 rotate-12 bg-[#111]" />
             {/* Fascia OBI */}
             <div className="absolute inset-x-0 bottom-0 h-[28%] border-t-[3px] border-[#111] bg-[#ffe600] px-3 py-2">
-              <p className="text-[10px] font-black uppercase tracking-wider">Valore stimato</p>
+              <p className="text-[10px] font-black uppercase tracking-wider">{t.heroBookValueLabel}</p>
               <p className="text-2xl font-black leading-tight">¥ → €</p>
-              <p className="text-[9px] font-bold uppercase text-[#111]/70">初版 · prima stampa</p>
+              <p className="text-[9px] font-bold uppercase text-[#111]/70">{t.heroBookPrinting}</p>
             </div>
           </div>
         </div>
@@ -288,20 +293,20 @@ function HeroBook() {
         ドン！
       </span>
       <div className="absolute -right-1 bottom-6 max-w-[170px] rotate-3 rounded-[50%] border-[3px] border-[#111] bg-white px-5 py-4 text-center text-xs font-black leading-snug shadow-[4px_4px_0_#111] sm:right-0">
-        “Prima stampa con OBI? Vale ~380 €!”
+        {t.heroBookCallout}
       </div>
     </div>
   );
 }
 
-function ScanDemo() {
+function ScanDemo({ t }: { t: LoginDict }) {
   const rows: [string, string][] = [
-    ["Serie", "One Piece"],
-    ["Volume", "#1"],
-    ["Lingua", "Giapponese"],
-    ["Stampa", "初版 · 1ª"],
-    ["OBI", "Sì"],
-    ["Stato", "Ottimo"],
+    [t.scanRowSeries, "One Piece"],
+    [t.scanRowVolume, "#1"],
+    [t.scanRowLanguage, t.scanValueLanguage],
+    [t.scanRowPrinting, "初版 · 1ª"],
+    [t.scanRowObi, t.scanValueYes],
+    [t.scanRowCondition, t.scanValueCondition],
   ];
   return (
     <div className="mt-5 grid gap-4 sm:grid-cols-[140px_1fr]">
@@ -309,7 +314,7 @@ function ScanDemo() {
         <div className="absolute inset-2 border-2 border-dashed border-[#ffe600]" />
         <div className="absolute inset-x-2 top-1/2 h-0.5 animate-pulse bg-[#e60012] shadow-[0_0_12px_#e60012]" />
         <span className="absolute bottom-2 left-0 right-0 text-center text-[10px] font-black uppercase tracking-widest text-[#ffe600]">
-          scansione…
+          {t.scanning}
         </span>
       </div>
       <dl className="grid grid-cols-2 gap-2 self-center text-sm">
@@ -324,19 +329,19 @@ function ScanDemo() {
   );
 }
 
-function PriceTag() {
+function PriceTag({ t }: { t: LoginDict }) {
   return (
     <div className="mt-4 -rotate-2 border-[3px] border-[#111] bg-[#ffe600] p-3 shadow-[4px_4px_0_#111]">
-      <p className="text-[10px] font-black uppercase tracking-widest">Mediana di 755 vendite</p>
+      <p className="text-[10px] font-black uppercase tracking-widest">{t.priceTagMedian}</p>
       <p className="text-3xl font-black">380 €</p>
-      <p className="text-[10px] font-bold uppercase text-[#111]/70">One Piece 1 · 初版 · RAW</p>
+      <p className="text-[10px] font-bold uppercase text-[#111]/70">{t.priceTagSubtitle}</p>
     </div>
   );
 }
 
-function Sparkline() {
+function Sparkline({ t }: { t: LoginDict }) {
   return (
-    <svg viewBox="0 0 200 70" className="mt-4 h-20 w-full" role="img" aria-label="Andamento del valore in crescita">
+    <svg viewBox="0 0 200 70" className="mt-4 h-20 w-full" role="img" aria-label={t.sparklineAriaLabel}>
       <path d="M0 69 H200" stroke="#111" strokeWidth="2" />
       <path
         className="manga-draw"
@@ -352,11 +357,11 @@ function Sparkline() {
   );
 }
 
-function ChatDemo() {
+function ChatDemo({ t }: { t: LoginDict }) {
   return (
     <div className="space-y-3 text-sm">
       <div className="ml-auto max-w-[85%] rounded-2xl rounded-br-none border-2 border-[#111] bg-[#111] px-4 py-2.5 font-medium text-white">
-        Ho preso la Jump 36-37 del 2025, quanto vale?
+        {t.chatDemoUser}
       </div>
       <div className="flex items-start gap-2">
         <span
@@ -366,7 +371,7 @@ function ChatDemo() {
           コ
         </span>
         <div className="max-w-[85%] rounded-2xl rounded-tl-none border-2 border-[#111] bg-white px-4 py-2.5 font-medium">
-          Numero doppio, bello! Mediana di 106 annunci: <b>~158 €</b>. La aggiungo alla collezione?
+          {t.chatDemoReply}
         </div>
       </div>
     </div>

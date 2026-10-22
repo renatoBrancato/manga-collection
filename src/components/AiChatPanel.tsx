@@ -4,6 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { prepareCoverBlob } from "@/lib/image-client";
 import { MAX_CHAT_IMAGES, type ChatAction, type ChatEntityContext } from "@/lib/ai/schemas";
+import { useTranslations } from "@/lib/i18n/LocaleProvider";
+import type aiChatPanelDict from "@/lib/i18n/dictionaries/aiChatPanel";
+
+type AiChatPanelDict = (typeof aiChatPanelDict)["it"];
 
 type ChatMessage = {
   id: string;
@@ -21,55 +25,35 @@ function messageImages(message: ChatMessage): string[] {
   return message.imageUrls ?? (message.imageUrl ? [message.imageUrl] : []);
 }
 
-const WELCOME_MESSAGE: ChatMessage = {
-  id: "welcome",
-  role: "assistant",
-  text: "Ciao, sono Koma — il tuo assistente da collezione. Mandami una o più foto: posso riconoscere più manga insieme, oppure valutare lo stato di un volume da copertina, retro e colophon. Cerco anche tra i tuoi volumi e aggiorno i dati.",
-};
-
-const FIELD_LABELS: Record<string, string> = {
-  series: "Serie",
-  format: "Formato",
-  volume_number: "Volume",
-  issue_number: "Numero",
-  release_year: "Anno",
-  publisher: "Editore",
-  isbn: "ISBN",
-  is_first_print: "Prima stampa",
-  has_obi: "OBI",
-  is_sealed: "Sigillato",
-  is_for_sale: "In vendita",
-  printing_notes: "Stampa",
-  grading_authority: "Grading",
-  grading_value: "Voto",
-  condition_estimate: "Condizione",
-  language: "Lingua",
-  estimated_value: "Valore",
-  currency: "Valuta",
-  notes: "Note",
-};
-
-function actionTitle(action: ChatAction): string {
-  if (action.type === "add") {
-    const number = action.payload.volume_number ?? action.payload.issue_number;
-    return `Aggiungi ${action.payload.series}${number != null ? ` #${number}` : ""}`;
-  }
-  if (action.type === "update") return `Aggiorna ${action.payload.series ?? "elemento selezionato"}`;
-  return `Rimuovi ${action.payload.series}`;
+function createWelcomeMessage(t: AiChatPanelDict): ChatMessage {
+  return {
+    id: "welcome",
+    role: "assistant",
+    text: t.welcomeMessage,
+  };
 }
 
-function actionDetails(action: ChatAction): Array<[string, string]> {
+function actionTitle(action: ChatAction, t: AiChatPanelDict): string {
+  if (action.type === "add") {
+    const number = action.payload.volume_number ?? action.payload.issue_number;
+    return t.addActionTitle(action.payload.series, number != null ? String(number) : undefined);
+  }
+  if (action.type === "update") return t.updateActionTitle(action.payload.series ?? t.defaultSelectedItem);
+  return t.removeActionTitle(action.payload.series);
+}
+
+function actionDetails(action: ChatAction, t: AiChatPanelDict): Array<[string, string]> {
   const ignored = new Set(["id", "image_url"]);
   return Object.entries(action.payload)
     .filter(([key, value]) => !ignored.has(key) && value !== undefined && value !== "")
     .map(([key, value]) => [
-      FIELD_LABELS[key] ?? key,
+      t.fieldLabels[key] ?? key,
       value === null
-        ? "Svuota il campo"
+        ? t.clearField
         : typeof value === "boolean"
           ? value
-            ? "Sì"
-            : "No"
+            ? t.yes
+            : t.no
           : String(value),
     ]);
 }
@@ -80,6 +64,8 @@ function actionImageUrl(action: ChatAction): string | null {
 
 export default function AiChatPanel({ userId }: { userId: string }) {
   const router = useRouter();
+  const { t: dict } = useTranslations();
+  const t = dict.aiChatPanel;
   const storageKey = `manga-collection:koma-chat:${userId}`;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -94,7 +80,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [completedActions, setCompletedActions] = useState<Set<string>>(new Set());
-  const [messages, setMessages] = useState<ChatMessage[]>([WELCOME_MESSAGE]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => [createWelcomeMessage(t)]);
 
   useEffect(() => {
     let cancelled = false;
@@ -188,7 +174,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
     const accepted = images.slice(0, Math.max(0, free));
     setError(
       images.length > accepted.length
-        ? `Puoi allegare al massimo ${MAX_CHAT_IMAGES} foto per messaggio.`
+        ? t.maxImagesError(MAX_CHAT_IMAGES)
         : null
     );
     if (accepted.length === 0) return;
@@ -216,7 +202,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
   }
 
   function resetChat() {
-    setMessages([WELCOME_MESSAGE]);
+    setMessages([createWelcomeMessage(t)]);
     setContextImageUrls([]);
     setCompletedActions(new Set());
     setRecentContext(null);
@@ -233,7 +219,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
 
     const response = await fetch("/api/chat/image", { method: "POST", body: form });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.error || "Upload immagine fallito");
+    if (!response.ok) throw new Error(body.error || t.uploadImageFailed);
     return body.imageUrl as string;
   }
 
@@ -245,8 +231,8 @@ export default function AiChatPanel({ userId }: { userId: string }) {
     const text =
       input.trim() ||
       (sending.length > 1
-        ? "Analizza queste foto e dimmi cosa riconosci."
-        : "Analizza questa immagine e dimmi cosa riconosci.");
+        ? t.analyzeMultiplePhotos
+        : t.analyzeSinglePhoto);
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
       role: "user",
@@ -287,7 +273,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
         }),
       });
       const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.error || "Richiesta AI fallita");
+      if (!response.ok) throw new Error(body.error || t.aiRequestFailed);
 
       if ("recentContext" in body) setRecentContext(body.recentContext ?? null);
       if (body.executed > 0) {
@@ -304,7 +290,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
         },
       ]);
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : "Errore durante la richiesta";
+      const message = cause instanceof Error ? cause.message : t.genericRequestError;
       if (sending.length > 0) {
         // Upload fallito: le anteprime blob: non sopravvivono al ricaricamento
         // e non devono finire nella chat salvata.
@@ -316,7 +302,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
       setError(message);
       setMessages((current) => [
         ...current,
-        { id: crypto.randomUUID(), role: "assistant", text: `Non sono riuscito a completare la richiesta: ${message}` },
+        { id: crypto.randomUUID(), role: "assistant", text: t.requestFailedMessage(message) },
       ]);
     } finally {
       setLoading(false);
@@ -335,7 +321,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
         body: JSON.stringify(action),
       });
       const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.error || "Operazione fallita");
+      if (!response.ok) throw new Error(body.error || t.operationFailed);
 
       setCompletedActions((current) => new Set(current).add(actionKey));
       const imageUrl = actionImageUrl(action);
@@ -349,18 +335,18 @@ export default function AiChatPanel({ userId }: { userId: string }) {
           role: "assistant",
           text:
             (action.type === "add"
-              ? "Elemento aggiunto alla collezione."
+              ? t.itemAdded
               : action.type === "update"
-                ? "Elemento aggiornato correttamente."
+                ? t.itemUpdated
                 : action.payload.forget_history
-                  ? "Elemento rimosso dalla collezione e dallo storico del valore."
-                  : "Elemento rimosso dalla collezione.") +
-            (body.imageWarning ? ` Attenzione: ${body.imageWarning}` : ""),
+                  ? t.itemRemovedWithHistory
+                  : t.itemRemoved) +
+            (body.imageWarning ? t.imageWarningSuffix(body.imageWarning) : ""),
         },
       ]);
       router.refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Operazione fallita");
+      setError(cause instanceof Error ? cause.message : t.operationFailed);
     } finally {
       setConfirming(null);
     }
@@ -375,7 +361,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-base ring-1 ring-white/20">
           コ
         </span>
-        <span className="pr-1">Chiedi a Koma</span>
+        <span className="pr-1">{t.askKoma}</span>
       </button>
     );
   }
@@ -396,21 +382,21 @@ export default function AiChatPanel({ userId }: { userId: string }) {
                   online
                 </span>
               </div>
-              <p className="text-xs text-indigo-100/80">Il tuo assistente manga</p>
+              <p className="text-xs text-indigo-100/80">{t.yourMangaAssistant}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={resetChat}
               className="rounded-full bg-black/15 px-3 py-2 text-[11px] font-medium text-white/75 transition hover:bg-black/25 hover:text-white"
-              title="Cancella la conversazione corrente"
+              title={t.clearConversationTitle}
             >
-              Nuova chat
+              {t.newChat}
             </button>
             <button
               onClick={() => setOpen(false)}
               className="flex h-9 w-9 items-center justify-center rounded-full bg-black/15 text-white/80 transition hover:bg-black/25 hover:text-white"
-              aria-label="Chiudi chat"
+              aria-label={t.closeChat}
             >
               ✕
             </button>
@@ -441,7 +427,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={messageImages(message)[0]}
-                    alt="Allegato"
+                    alt={t.attachmentAlt}
                     className="mb-3 max-h-64 w-full rounded-xl object-cover ring-1 ring-white/10"
                   />
                 )}
@@ -452,7 +438,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={url}
-                          alt={`Foto ${index + 1}`}
+                          alt={t.photoAlt(index + 1)}
                           className="aspect-[3/4] w-full rounded-lg object-cover ring-1 ring-white/10"
                         />
                         <span className="absolute left-1 top-1 rounded bg-black/60 px-1 text-[10px] font-semibold text-white">
@@ -479,9 +465,9 @@ export default function AiChatPanel({ userId }: { userId: string }) {
                       </span>
                       <div>
                         <p className="text-[10px] font-semibold uppercase tracking-widest text-indigo-300">
-                          Proposta di Koma
+                          {t.komaProposal}
                         </p>
-                        <p className="text-sm font-semibold text-white">{actionTitle(action)}</p>
+                        <p className="text-sm font-semibold text-white">{actionTitle(action, t)}</p>
                       </div>
                     </div>
                     <div className="p-4">
@@ -490,12 +476,12 @@ export default function AiChatPanel({ userId }: { userId: string }) {
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={actionImageUrl(action)!}
-                            alt="Copertina proposta"
+                            alt={t.proposedCoverAlt}
                             className="h-28 w-20 shrink-0 rounded-lg object-cover ring-1 ring-white/10"
                           />
                         )}
                         <dl className="grid min-w-0 flex-1 grid-cols-[auto_1fr] content-start gap-x-3 gap-y-1.5 text-xs">
-                          {actionDetails(action).map(([key, value]) => (
+                          {actionDetails(action, t).map(([key, value]) => (
                             <div key={key} className="contents">
                               <dt className="text-slate-500">{key}</dt>
                               <dd className="truncate font-medium text-slate-200">{value}</dd>
@@ -509,10 +495,10 @@ export default function AiChatPanel({ userId }: { userId: string }) {
                         className="mt-4 w-full rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-950/20 transition hover:bg-emerald-400 disabled:opacity-50"
                       >
                         {completed
-                          ? "✓ Operazione confermata"
+                          ? t.confirmed
                           : confirming === actionKey
-                            ? "Salvataggio..."
-                            : "Conferma e salva"}
+                            ? t.saving
+                            : t.confirmAndSave}
                       </button>
                     </div>
                   </div>
@@ -530,7 +516,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-400" />
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-400 [animation-delay:150ms]" />
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-fuchsia-400 [animation-delay:300ms]" />
-              <span className="ml-2 text-xs text-slate-500">Koma sta analizzando...</span>
+              <span className="ml-2 text-xs text-slate-500">{t.komaAnalyzing}</span>
             </div>
           </div>
         )}
@@ -549,18 +535,18 @@ export default function AiChatPanel({ userId }: { userId: string }) {
                 <img
                   key={url}
                   src={url}
-                  alt="Immagine in contesto"
+                  alt={t.contextImageAlt}
                   className="h-12 w-9 rounded object-cover ring-2 ring-slate-900"
                 />
               ))}
             </div>
             <span className="min-w-0 flex-1 text-xs text-slate-400">
               {contextImageUrls.length > 1
-                ? `${contextImageUrls.length} foto mantenute per i messaggi successivi`
-                : "Immagine mantenuta per i messaggi successivi"}
+                ? t.multipleImagesKept(contextImageUrls.length)
+                : t.singleImageKept}
             </span>
             <button type="button" onClick={() => setContextImageUrls([])} className="text-xs text-red-400">
-              Rimuovi
+              {t.remove}
             </button>
           </div>
         )}
@@ -572,7 +558,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={attachment.preview}
-                    alt={`Foto ${index + 1}`}
+                    alt={t.photoAlt(index + 1)}
                     className="h-16 w-12 rounded-lg object-cover ring-1 ring-white/10"
                   />
                   <span className="absolute bottom-0.5 left-0.5 rounded bg-black/60 px-1 text-[10px] font-semibold text-white">
@@ -581,7 +567,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
                   <button
                     type="button"
                     onClick={() => removeAttachment(attachment.id)}
-                    aria-label={`Rimuovi foto ${index + 1}`}
+                    aria-label={t.removePhotoAriaLabel(index + 1)}
                     className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-950 text-[10px] text-slate-300 ring-1 ring-white/20 transition hover:text-red-400"
                   >
                     ✕
@@ -592,7 +578,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  aria-label="Aggiungi altre foto"
+                  aria-label={t.addMorePhotosAriaLabel}
                   className="flex h-16 w-12 shrink-0 items-center justify-center rounded-lg border border-dashed border-slate-600 text-lg text-slate-500 transition hover:border-indigo-400 hover:text-indigo-300"
                 >
                   +
@@ -600,7 +586,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
               )}
             </div>
             <p className="mt-1.5 text-[10px] text-slate-500">
-              {attachments.length}/{MAX_CHAT_IMAGES} foto · stesso manga da più lati o manga diversi
+              {t.attachmentsCounter(attachments.length, MAX_CHAT_IMAGES)}
             </p>
           </div>
         )}
@@ -617,7 +603,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg text-slate-400 transition hover:bg-slate-800 hover:text-white"
-            title={`Allega foto (max ${MAX_CHAT_IMAGES})`}
+            title={t.attachPhotoTitle(MAX_CHAT_IMAGES)}
           >
             📎
           </button>
@@ -638,7 +624,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
               }
             }}
             rows={2}
-            placeholder="Scrivi a Koma o allega delle foto..."
+            placeholder={t.inputPlaceholder}
             className="min-h-10 flex-1 resize-none bg-transparent px-1 py-2 text-base text-slate-100 outline-none placeholder:text-slate-600 sm:text-sm"
           />
           <button
@@ -650,8 +636,8 @@ export default function AiChatPanel({ userId }: { userId: string }) {
           </button>
         </div>
         <div className="mt-2 flex items-center justify-between px-1">
-          <p className="text-[10px] text-slate-600">Invio con Enter · nuova riga con Shift+Enter</p>
-          <p className="text-[10px] text-slate-600">Koma può sbagliare: controlla sempre i dati salvati</p>
+          <p className="text-[10px] text-slate-600">{t.enterToSendHint}</p>
+          <p className="text-[10px] text-slate-600">{t.komaDisclaimer}</p>
         </div>
         {error && <p className="mt-2 rounded-lg bg-red-950/40 px-3 py-2 text-xs text-red-300">{error}</p>}
       </form>

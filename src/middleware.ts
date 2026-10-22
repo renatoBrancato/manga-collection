@@ -1,5 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  detectLocaleFromAcceptLanguage,
+  isLocale,
+  LOCALE_COOKIE,
+  LOCALE_COOKIE_MAX_AGE,
+} from "@/lib/i18n/locale";
 
 /**
  * Refreshes the Supabase auth session on every request so Server
@@ -7,6 +13,17 @@ import { NextResponse, type NextRequest } from "next/server";
  */
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
+
+  // Prima visita (nessun cookie di preferenza): rileva la lingua dalla
+  // localizzazione del browser (Accept-Language), NON dalla geolocalizzazione.
+  const existingLocale = request.cookies.get(LOCALE_COOKIE)?.value;
+  const detectedLocale = isLocale(existingLocale)
+    ? existingLocale
+    : detectLocaleFromAcceptLanguage(request.headers.get("accept-language"));
+  if (!isLocale(existingLocale)) {
+    request.cookies.set(LOCALE_COOKIE, detectedLocale);
+    response = NextResponse.next({ request });
+  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -40,7 +57,19 @@ export async function middleware(request: NextRequest) {
   if (!user && !isAuthRoute && request.nextUrl.pathname !== "/") {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    return NextResponse.redirect(url);
+    const redirectResponse = NextResponse.redirect(url);
+    if (!isLocale(existingLocale)) {
+      redirectResponse.cookies.set(LOCALE_COOKIE, detectedLocale, {
+        path: "/",
+        maxAge: LOCALE_COOKIE_MAX_AGE,
+        sameSite: "lax",
+      });
+    }
+    return redirectResponse;
+  }
+
+  if (!isLocale(existingLocale)) {
+    response.cookies.set(LOCALE_COOKIE, detectedLocale, { path: "/", maxAge: LOCALE_COOKIE_MAX_AGE, sameSite: "lax" });
   }
 
   return response;

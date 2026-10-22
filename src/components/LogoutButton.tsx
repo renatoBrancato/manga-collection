@@ -2,10 +2,12 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "@/lib/i18n/LocaleProvider";
 
 export default function LogoutButton() {
   const supabase = createClient();
   const router = useRouter();
+  const { t } = useTranslations();
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -18,7 +20,7 @@ export default function LogoutButton() {
       onClick={handleLogout}
       className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-slate-800"
     >
-      Esci
+      {t.logoutButton.label}
     </button>
   );
 }

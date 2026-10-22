@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useTranslations } from "@/lib/i18n/LocaleProvider";
 
 function randomSlug() {
   // 10 caratteri alfanumerici, sufficienti per un link non indovinabile
@@ -22,6 +23,7 @@ export default function ShareButton({
 }) {
   const supabase = createClient();
   const router = useRouter();
+  const { t } = useTranslations();
   const [open, setOpen] = useState(false);
   const [enabled, setEnabled] = useState(initialEnabled);
   const [slug, setSlug] = useState(initialSlug);
@@ -83,7 +85,7 @@ export default function ShareButton({
 
     setLoading(false);
     if (error) {
-      alert(`Errore: ${error.message}`);
+      alert(t.shareButton.updateError(error.message));
       return;
     }
     setEnabled(nextEnabled);
@@ -104,7 +106,7 @@ export default function ShareButton({
         onClick={togglePopover}
         className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-slate-800"
       >
-        🔗 Condividi
+        {t.shareButton.openLabel}
       </button>
 
       {open &&
@@ -118,7 +120,7 @@ export default function ShareButton({
             <div
               role="dialog"
               aria-modal={mobile}
-              aria-label="Condividi la collezione"
+              aria-label={t.shareButton.dialogTitle}
               className={`rounded-xl border border-slate-800 bg-slate-900 p-4 shadow-xl ${
                 mobile ? "w-full max-w-sm" : "fixed"
               }`}
@@ -126,20 +128,19 @@ export default function ShareButton({
             >
               {mobile && (
                 <div className="mb-3 flex items-center justify-between">
-                  <h2 className="font-semibold text-white">Condividi la collezione</h2>
+                  <h2 className="font-semibold text-white">{t.shareButton.dialogTitle}</h2>
                   <button
                     type="button"
                     onClick={() => setOpen(false)}
                     className="rounded-md px-2 py-1 text-slate-400 hover:bg-white/10 hover:text-white"
-                    aria-label="Chiudi"
+                    aria-label={t.shareButton.close}
                   >
                     ✕
                   </button>
                 </div>
               )}
               <p className="text-sm text-slate-300">
-                Condividi la tua collezione con un link pubblico in sola lettura: chi lo apre può solo
-                guardare, non può aggiungere o rimuovere nulla.
+                {t.shareButton.description}
               </p>
 
               <label className="mt-3 flex items-center gap-2 text-sm text-slate-200">
@@ -150,7 +151,7 @@ export default function ShareButton({
                   onChange={handleToggle}
                   className="h-4 w-4 rounded border-slate-700 bg-slate-950"
                 />
-                Collezione pubblica
+                {t.shareButton.publicCollection}
               </label>
 
               {enabled && slug && (
@@ -162,7 +163,7 @@ export default function ShareButton({
                     onClick={handleCopy}
                     className="shrink-0 rounded-lg bg-indigo-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-400"
                   >
-                    {copied ? "Copiato!" : "Copia"}
+                    {copied ? t.shareButton.copied : t.shareButton.copy}
                   </button>
                 </div>
               )}
