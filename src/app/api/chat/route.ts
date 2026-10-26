@@ -5,6 +5,7 @@ import { MAX_CHAT_IMAGES, runCollectionChat } from "@/lib/ai/openai";
 import { executeChatAction } from "@/lib/ai/actions";
 import { chatEntityContextSchema } from "@/lib/ai/schemas";
 import { getLocale } from "@/lib/i18n/server";
+import { getAiBudget, recordAiUsage } from "@/lib/ai/usage";
 
 // Più foto e più pezzi richiedono diversi giri con il modello.
 export const maxDuration = 300;
@@ -38,8 +39,16 @@ export async function POST(request: Request) {
 
   try {
     const body = requestSchema.parse(await request.json());
-    const items = await listItems(user.id);
     const locale = await getLocale();
+    const budget = await getAiBudget(user.id);
+    if (!budget.allowed) {
+      const message =
+        locale === "en"
+          ? "You've used up this week's free Koma budget and have no purchased credits. Credit packages are coming soon — try again next week in the meantime."
+          : "Hai esaurito il budget gratuito di Koma per questa settimana e non hai crediti acquistati. I pacchetti di crediti arriveranno a breve — nel frattempo riprova la prossima settimana.";
+      return Response.json({ error: message }, { status: 402 });
+    }
+    const items = await listItems(user.id);
     const imageUrls = body.imageUrls ?? (body.imageUrl ? [body.imageUrl] : []);
     const contextImageUrls = body.contextImageUrls ?? (body.contextImageUrl ? [body.contextImageUrl] : []);
     const result = await runCollectionChat({
@@ -52,6 +61,7 @@ export async function POST(request: Request) {
       userId: user.id,
       locale,
     });
+    await recordAiUsage(user.id, result.usage.model, result.usage);
 
     if (result.actions.length === 0) {
       return Response.json(result);

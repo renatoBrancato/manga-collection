@@ -1,6 +1,7 @@
 import type { MangaItem } from "@/lib/types";
 import { checkIssueNumber, lookupMarketPrice, magazineKey } from "@/lib/pricing/westblue";
 import { revalueUserCollection } from "@/lib/pricing/revalue";
+import { emptyTokenUsage, estimateCostUsd, type TokenUsage } from "@/lib/ai/pricing";
 import {
   MAX_CHAT_IMAGES,
   mangaMutationSchema,
@@ -42,6 +43,11 @@ type OpenAIResponse = {
   id: string;
   output: ResponseOutput[];
   error?: { message?: string };
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    input_tokens_details?: { cached_tokens?: number };
+  };
 };
 
 const itemProperties = {
@@ -428,6 +434,15 @@ Quando ricevi una o più foto:
 Chiedi una precisazione solo se non puoi identificare l'edizione dopo aver
 analizzato la foto e cercato sul web, oppure se trovi più edizioni plausibili.
 Non chiedere conferma dopo un comando esplicito dell'utente.`;
+}
+
+/** Somma i token di una risposta ai totali del turno, per il costo stimato finale. */
+function addUsage(totals: TokenUsage, response: OpenAIResponse): void {
+  const usage = response.usage;
+  if (!usage) return;
+  totals.inputTokens += usage.input_tokens ?? 0;
+  totals.cachedInputTokens += usage.input_tokens_details?.cached_tokens ?? 0;
+  totals.outputTokens += usage.output_tokens ?? 0;
 }
 
 function outputText(response: OpenAIResponse): string {
@@ -989,7 +1004,7 @@ Non inventare nulla che non sia visibile.`;
  * scambiare la pubblicità dell'OBI per il titolo. Un passaggio mirato è molto
  * più affidabile e fornisce l'elenco dei pezzi attesi.
  */
-async function readPhotos(imageUrls: string[]): Promise<PhotoPiece[] | null> {
+async function readPhotos(imageUrls: string[], usageTotals: TokenUsage): Promise<PhotoPiece[] | null> {
   const content: Array<Record<string, string>> = [{ type: "input_text", text: "Leggi le foto." }];
   imageUrls.forEach((url, index) => {
     content.push({ type: "input_text", text: `Foto ${index + 1}:` });
@@ -1004,6 +1019,7 @@ async function readPhotos(imageUrls: string[]): Promise<PhotoPiece[] | null> {
       input: [{ role: "user", content }],
       text: { format: { type: "json_schema", name: "photo_reading", strict: true, schema: photoReadingSchema } },
     });
+    addUsage(usageTotals, response);
     const parsed = JSON.parse(outputText(response)) as { pieces?: PhotoPiece[] };
     if (!Array.isArray(parsed.pieces) || parsed.pieces.length === 0) return null;
     return parsed.pieces.map((piece) => {
@@ -1055,7 +1071,11 @@ export async function runCollectionChat({
   executed: number;
   intent: { valuation: boolean };
   verifiedPhotoTitles: Array<{ observedTitle: string; canonicalSeries: string; volume: number | null }>;
+  /** Costo stimato dell'intero turno (lettura foto + eventuali giri di tool-calling). */
+  usage: { model: string; estimatedCostUsd: number } & TokenUsage;
 }> {
+  const chatModel = process.env.OPENAI_CHAT_MODEL || "gpt-5-mini";
+  const usageTotals = emptyTokenUsage();
   const instructions = buildInstructions(locale);
   const requiresValuation =
     /\b(valut|prezz|quanto vale|stima(?:re|zione)?|rivalut)\w*/i.test(message);
@@ -1072,7 +1092,7 @@ export async function runCollectionChat({
   ];
   // Ogni foto è preceduta da un'etichetta: il modello la usa per indicare in
   // cover_photo quale immagine è la copertina di ciascun pezzo.
-  const photoPieces = imageUrls.length > 0 ? await readPhotos(imageUrls) : null;
+  const photoPieces = imageUrls.length > 0 ? await readPhotos(imageUrls, usageTotals) : null;
   if (photoPieces) {
     content.push({
       type: "input_text",
@@ -1117,6 +1137,7 @@ export async function runCollectionChat({
   };
 
   let response = await createResponse(initialRequest);
+  addUsage(usageTotals, response);
 
   const actions: ChatAction[] = [];
   let executed = 0;
@@ -1362,6 +1383,7 @@ export async function runCollectionChat({
         previous_response_id: response.id,
         input: [{ role: "user", content: uncoveredPhotosReminder(uncoveredNow) }],
       });
+      addUsage(usageTotals, response);
       continue;
     }
     if (calls.length === 0 && pendingNow.length > 0 && reminders < 2 && round < maxRounds - 1) {
@@ -1376,6 +1398,7 @@ export async function runCollectionChat({
         previous_response_id: response.id,
         input: [{ role: "user", content: pendingReminder(pendingNow) }],
       });
+      addUsage(usageTotals, response);
       continue;
     }
     const unverifiedPhotoPieces =
@@ -1408,6 +1431,7 @@ export async function runCollectionChat({
             "Non chiedere ancora conferma all'utente. Per ogni copertina non verificata, cerca sul web il titolo originale o canonico e il numero. Poi chiama verify_series_identity con una fonte dei risultati. Per un tankobon usa volume_number e la verifica AniList; per uno zashi usa volume_number null, verifica testata, fascicolo e anno con gli alias della rivista e la fonte web, senza AniList. Non chiedere di scegliere fra grafie equivalenti di una testata riconosciuta.",
         }],
       });
+      addUsage(usageTotals, response);
       continue;
     }
     if (calls.length === 0) {
@@ -1418,6 +1442,7 @@ export async function runCollectionChat({
         executed,
         intent: { valuation: requiresValuation },
         verifiedPhotoTitles: verifiedPhotoTitles(),
+        usage: { model: chatModel, ...usageTotals, estimatedCostUsd: estimateCostUsd(chatModel, usageTotals) },
       };
     }
 
@@ -1679,6 +1704,7 @@ export async function runCollectionChat({
         executed,
         intent: { valuation: requiresValuation },
         verifiedPhotoTitles: verifiedPhotoTitles(),
+        usage: { model: chatModel, ...usageTotals, estimatedCostUsd: estimateCostUsd(chatModel, usageTotals) },
       };
     }
 
@@ -1699,6 +1725,7 @@ export async function runCollectionChat({
           ? [...outputs, { role: "user", content: uncoveredPhotosReminder(uncoveredAfter) }]
           : outputs,
     });
+    addUsage(usageTotals, response);
   }
 
   const unreadableVolume =
@@ -1726,5 +1753,6 @@ export async function runCollectionChat({
     executed,
     intent: { valuation: requiresValuation },
     verifiedPhotoTitles: verifiedPhotoTitles(),
+    usage: { model: chatModel, ...usageTotals, estimatedCostUsd: estimateCostUsd(chatModel, usageTotals) },
   };
 }
