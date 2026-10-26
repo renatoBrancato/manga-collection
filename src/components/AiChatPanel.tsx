@@ -421,35 +421,35 @@ export default function AiChatPanel({ userId }: { userId: string }) {
             </button>
           </div>
         </div>
-        {usagePercent !== null && (
-          <div className="relative mt-3 flex items-center gap-2">
-            <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-indigo-100/80">
-              {t.usageBarLabel}
-            </span>
-            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-black/20">
-              <div
-                className={`h-full rounded-full transition-all ${
-                  usagePercent >= 100 ? "bg-red-400" : "bg-white/80"
-                }`}
-                style={{ width: `${usagePercent}%` }}
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowUsageInfo((shown) => !shown)}
-              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-black/15 text-[10px] font-bold text-white/80 ring-1 ring-white/20 hover:bg-black/25"
-              aria-label={t.usageBarInfoAriaLabel}
-            >
-              i
-            </button>
-            {showUsageInfo && (
-              <div className="absolute right-0 top-6 z-10 w-56 rounded-xl border border-white/10 bg-slate-900 p-3 text-xs text-slate-200 shadow-xl">
-                {t.usageBarInfoText}
-              </div>
-            )}
-          </div>
-        )}
       </header>
+      {usagePercent !== null && (
+        <div className="relative z-10 flex shrink-0 items-center gap-2 border-b border-white/10 bg-slate-900/95 px-5 py-2">
+          <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-slate-400">
+            {t.usageBarLabel}
+          </span>
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+            <div
+              className={`h-full rounded-full transition-all ${
+                usagePercent >= 100 ? "bg-red-400" : "bg-indigo-400"
+              }`}
+              style={{ width: `${usagePercent}%` }}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowUsageInfo((shown) => !shown)}
+            className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white/10 text-[10px] font-bold text-slate-300 ring-1 ring-white/20 hover:bg-white/20"
+            aria-label={t.usageBarInfoAriaLabel}
+          >
+            i
+          </button>
+          {showUsageInfo && (
+            <div className="absolute right-4 top-9 z-20 w-56 rounded-xl border border-white/10 bg-slate-900 p-3 text-xs text-slate-200 shadow-xl">
+              {t.usageBarInfoText}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(99,102,241,0.08),_transparent_35%)] p-4 sm:p-5">
         {messages.map((message) => (
