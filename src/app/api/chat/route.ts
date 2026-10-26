@@ -5,7 +5,7 @@ import { MAX_CHAT_IMAGES, runCollectionChat } from "@/lib/ai/openai";
 import { executeChatAction } from "@/lib/ai/actions";
 import { chatEntityContextSchema } from "@/lib/ai/schemas";
 import { getLocale } from "@/lib/i18n/server";
-import { getAiBudget, recordAiUsage } from "@/lib/ai/usage";
+import { getAiBudget, recordAiUsage, freeTierUsagePercent } from "@/lib/ai/usage";
 
 // Più foto e più pezzi richiedono diversi giri con il modello.
 export const maxDuration = 300;
@@ -46,7 +46,10 @@ export async function POST(request: Request) {
         locale === "en"
           ? "You've used up this week's free Koma budget and have no purchased credits. Credit packages are coming soon — try again next week in the meantime."
           : "Hai esaurito il budget gratuito di Koma per questa settimana e non hai crediti acquistati. I pacchetti di crediti arriveranno a breve — nel frattempo riprova la prossima settimana.";
-      return Response.json({ error: message }, { status: 402 });
+      return Response.json(
+        { error: message, usedPercent: freeTierUsagePercent(budget), allowed: false },
+        { status: 402 }
+      );
     }
     const items = await listItems(user.id);
     const imageUrls = body.imageUrls ?? (body.imageUrl ? [body.imageUrl] : []);
@@ -62,9 +65,15 @@ export async function POST(request: Request) {
       locale,
     });
     await recordAiUsage(user.id, result.usage.model, result.usage);
+    const updatedBudget = await getAiBudget(user.id);
+    const usedPercent = freeTierUsagePercent(updatedBudget);
+    // Il costo in $ resta solo lato server: al client arriva solo la
+    // percentuale 0-100 del tetto gratuito consumato.
+    const { usage: _usage, ...resultWithoutUsage } = result;
+    void _usage;
 
     if (result.actions.length === 0) {
-      return Response.json(result);
+      return Response.json({ ...resultWithoutUsage, usedPercent, allowed: updatedBudget.allowed });
     }
 
     const executions = await Promise.all(
@@ -115,6 +124,8 @@ export async function POST(request: Request) {
       text: [successText, errorText && `Non completato:\n${errorText}`].filter(Boolean).join("\n\n"),
       actions: [],
       executed: succeeded.length + result.executed,
+      usedPercent,
+      allowed: updatedBudget.allowed,
       recentContext:
         succeeded.length > 0
           ? (() => {

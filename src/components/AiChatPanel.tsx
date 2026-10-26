@@ -81,6 +81,24 @@ export default function AiChatPanel({ userId }: { userId: string }) {
   const [confirming, setConfirming] = useState<string | null>(null);
   const [completedActions, setCompletedActions] = useState<Set<string>>(new Set());
   const [messages, setMessages] = useState<ChatMessage[]>(() => [createWelcomeMessage(t)]);
+  const [usagePercent, setUsagePercent] = useState<number | null>(null);
+  const [showUsageInfo, setShowUsageInfo] = useState(false);
+
+  // Percentuale del tetto gratuito consumata, caricata all'apertura della
+  // chat e poi aggiornata dalla risposta di ogni messaggio inviato.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    fetch("/api/chat/usage")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body) => {
+        if (!cancelled && body && typeof body.usedPercent === "number") setUsagePercent(body.usedPercent);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   useEffect(() => {
     let cancelled = false;
@@ -275,6 +293,7 @@ export default function AiChatPanel({ userId }: { userId: string }) {
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || t.aiRequestFailed);
 
+      if (typeof body.usedPercent === "number") setUsagePercent(body.usedPercent);
       if ("recentContext" in body) setRecentContext(body.recentContext ?? null);
       if (body.executed > 0) {
         setContextImageUrls([]);
@@ -402,6 +421,34 @@ export default function AiChatPanel({ userId }: { userId: string }) {
             </button>
           </div>
         </div>
+        {usagePercent !== null && (
+          <div className="relative mt-3 flex items-center gap-2">
+            <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-indigo-100/80">
+              {t.usageBarLabel}
+            </span>
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-black/20">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  usagePercent >= 100 ? "bg-red-400" : "bg-white/80"
+                }`}
+                style={{ width: `${usagePercent}%` }}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowUsageInfo((shown) => !shown)}
+              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-black/15 text-[10px] font-bold text-white/80 ring-1 ring-white/20 hover:bg-black/25"
+              aria-label={t.usageBarInfoAriaLabel}
+            >
+              i
+            </button>
+            {showUsageInfo && (
+              <div className="absolute right-0 top-6 z-10 w-56 rounded-xl border border-white/10 bg-slate-900 p-3 text-xs text-slate-200 shadow-xl">
+                {t.usageBarInfoText}
+              </div>
+            )}
+          </div>
+        )}
       </header>
 
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(99,102,241,0.08),_transparent_35%)] p-4 sm:p-5">

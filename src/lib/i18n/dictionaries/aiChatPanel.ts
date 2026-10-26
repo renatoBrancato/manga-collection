@@ -67,6 +67,10 @@ const aiChatPanel = {
     inputPlaceholder: "Scrivi a Koma o allega delle foto...",
     enterToSendHint: "Invio con Enter · nuova riga con Shift+Enter",
     komaDisclaimer: "Koma può sbagliare: controlla sempre i dati salvati",
+    usageBarLabel: "Utilizzo",
+    usageBarInfoAriaLabel: "Informazioni sull'utilizzo",
+    usageBarInfoText:
+      "Indica quanto hai usato Koma di recente. Si libera gradualmente: ogni utilizzo \"scade\" da solo dopo 7 giorni, non c'è un reset fisso a data o ora.",
   },
   en: {
     welcomeMessage:
@@ -136,6 +140,10 @@ const aiChatPanel = {
     inputPlaceholder: "Write to Koma or attach photos...",
     enterToSendHint: "Enter to send · Shift+Enter for a new line",
     komaDisclaimer: "Koma can make mistakes: always check the saved data",
+    usageBarLabel: "Usage",
+    usageBarInfoAriaLabel: "Usage information",
+    usageBarInfoText:
+      "Shows how much you've used Koma recently. It frees up gradually: each use \"expires\" on its own after 7 days, there's no fixed reset date or time.",
   },
 };
 

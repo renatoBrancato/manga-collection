@@ -13,6 +13,15 @@ export type AiBudget = {
 };
 
 /**
+ * Percentuale 0-100 del tetto gratuito "consumata" nella finestra mobile di
+ * 7 giorni (100 = tetto esaurito). Non viene mai mostrato un importo in $
+ * all'utente: solo questa percentuale, usata dalla barra nella chat.
+ */
+export function freeTierUsagePercent(budget: Pick<AiBudget, "freeUsedUsd">): number {
+  return Math.max(0, Math.min(100, Math.round((budget.freeUsedUsd / FREE_TIER_WEEKLY_USD) * 100)));
+}
+
+/**
  * Spesa "free" dell'utente nella finestra mobile di 7 giorni (168 ore, non
  * settimana solare) e saldo crediti acquistato. Va chiamata prima di avviare
  * un turno di chat per decidere se bloccare la richiesta.
